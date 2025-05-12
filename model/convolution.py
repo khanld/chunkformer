@@ -20,8 +20,7 @@ from typing import Tuple
 import torch
 from torch import nn
 
-
-class ConvolutionModule(nn.Module):
+class ChunkConvolutionModule(nn.Module):
     """ConvolutionModule in ChunkFormer model."""
     def __init__(self,
                  channels: int,
@@ -30,7 +29,7 @@ class ConvolutionModule(nn.Module):
                  norm: str = "batch_norm",
                  causal: bool = False,
                  bias: bool = True,
-                 use_dynamic_conv: bool = False):
+                 dynamic_conv: bool = False):
         """Construct an ConvolutionModule object.
         Args:
             channels (int): The number of channels of conv layers.
@@ -38,7 +37,7 @@ class ConvolutionModule(nn.Module):
             causal (int): Whether use causal convolution or not
         """
         super().__init__()
-        self.use_dynamic_conv = use_dynamic_conv
+        self.dynamic_conv = dynamic_conv
         self.channels = channels
         self.kernel_size = kernel_size
         self.pointwise_conv1 = nn.Conv1d(
@@ -56,12 +55,14 @@ class ConvolutionModule(nn.Module):
         if causal:
             padding = 0
             self.lorder = kernel_size - 1
-        elif use_dynamic_conv:
+        elif dynamic_conv:
+            # kernel_size should be an odd number for none causal convolution
             assert (kernel_size - 1) % 2 == 0
             padding = 0
-            self.lorder = (kernel_size - 1)//2
+            self.lorder = (kernel_size - 1) // 2
         else:
             # kernel_size should be an odd number for none causal convolution
+            assert (kernel_size - 1) % 2 == 0
             padding = (kernel_size - 1) // 2
             self.lorder = 0
         self.depthwise_conv = nn.Conv1d(
@@ -96,7 +97,7 @@ class ConvolutionModule(nn.Module):
         self,
         x: torch.Tensor,
         mask_pad: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool),
-        cache: torch.Tensor = torch.zeros((0, 0, 0)),
+        cache: torch.Tensor = torch.zeros((0, 0)),
         truncated_context_size: int = 0
 
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -106,28 +107,37 @@ class ConvolutionModule(nn.Module):
             mask_pad (torch.Tensor): used for batch padding (#batch, 1, time),
                 (0, 0, 0) means fake mask.
             cache (torch.Tensor): left context cache, it is only
-                used in causal convolution (#batch, channels, cache_t),
-                (0, 0, 0) meas fake cache.
+                used in causal convolution (channels, cache_t),
+                (0, 0) meas fake cache.
         Returns:
             torch.Tensor: Output tensor (#batch, time, channels).
         """
         # exchange the temporal dimension and the feature dimension
         x = x.transpose(1, 2)  # (#batch, channels, time)
-        lorder = self.kernel_size//2
+        lorder = self.kernel_size // 2
         chunk_size = x.shape[-1]
-        if cache.size(0) == 0:
+        cache_t = cache.size(-1)
+        if cache_t == 0:
             cache = torch.zeros(self.channels, lorder).to(x.device)
         # GLU mechanism
         x = self.pointwise_conv1(x)  # (batch, 2*channel, dim)
         x = nn.functional.glu(x, dim=1)  # (batch, channel, dim)
 
-        #----------Overlapping Chunk Transformation-----------------------------------
-        x = x.transpose(0, 1).reshape( self.channels, -1)  # [C, n_chunk * T]
+        # ----------Overlapping Chunk Transformation-----------------------------------
+        x = x.transpose(0, 1).reshape(self.channels, -1)  # [C, n_chunk * T]
         x = torch.cat([cache, x], dim=-1)
-        new_cache = x[:, :truncated_context_size + cache.size(-1)][:, -cache.size(-1):].cpu()
+
+        # Streaming long-form transcription is disabled if input cache is empty
+        if cache_t > 0:
+            new_cache = x[:, :truncated_context_size + cache.size(-1)]
+            new_cache = new_cache[:, -cache.size(-1):]
+        else:
+            new_cache = torch.zeros((0, 0))
+
         x = nn.functional.pad(x, (0, lorder), 'constant', 0.0)
-        x = x.unfold(-1, chunk_size + 2 * lorder, chunk_size).transpose(0, 1) #[n_chunk +1, C, cnn_cache_size]
-        #-----------------------------------------------------------------------------
+        x = x.unfold(-1, chunk_size + 2 * lorder, chunk_size).transpose(0, 1)
+        # [n_chunk +1, C, chunk_size + 2 * lorder]
+        # -----------------------------------------------------------------------------
 
         if mask_pad.size(2) > 0:  # time > 0
             x = torch.where(mask_pad, x, 0)
@@ -143,7 +153,6 @@ class ConvolutionModule(nn.Module):
         x = self.pointwise_conv2(x)
         # mask batch padding
         if mask_pad.size(2) > 0:  # time > 0
-            # x.masked_fill_(~mask_pad[:, :, self.lorder:], 0.0)
-            x.masked_fill_(~mask_pad[:, :, self.lorder:-self.lorder], 0.0)
+            x.masked_fill_(~mask_pad[:, :, lorder:-lorder], 0.0)
 
         return x.transpose(1, 2), new_cache

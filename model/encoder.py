@@ -21,17 +21,16 @@ import torch
 import math
 
 
-from model.attention import MultiHeadedAttention
-from model.attention import StreamingRelPositionMultiHeadedAttention
-from model.convolution import ConvolutionModule
-from model.embedding import StreamingRelPositionalEncoding
+from model.attention import ChunkAttentionWithRelativeRightContext
+from model.convolution import ChunkConvolutionModule
+from model.embedding import RelPositionalEncodingWithRightContext
 from model.encoder_layer import ChunkFormerEncoderLayer
 from model.positionwise_feed_forward import PositionwiseFeedForward
 from model.subsampling import DepthwiseConvSubsampling
 from model.utils.common import get_activation
 from model.utils.mask import make_pad_mask
-
-class BaseEncoder(torch.nn.Module):
+class ChunkFormerEncoder(BaseEncoder):
+    """ChunkFormer encoder module."""
     def __init__(
         self,
         input_size: int,
@@ -42,102 +41,142 @@ class BaseEncoder(torch.nn.Module):
         dropout_rate: float = 0.1,
         positional_dropout_rate: float = 0.1,
         attention_dropout_rate: float = 0.0,
-        input_layer: str = "conv2d",
-        pos_enc_layer_type: str = "abs_pos",
+        input_layer: str = "dw_striding",
+        pos_enc_layer_type: str = "chunk_rel_pos",
         normalize_before: bool = True,
         static_chunk_size: int = 0,
         use_dynamic_chunk: bool = False,
         global_cmvn: torch.nn.Module = None,
         use_dynamic_left_chunk: bool = False,
-        use_limited_chunk: bool = False,
-        limited_decoding_chunk_sizes: list = [],
-        limited_left_chunk_sizes: list = [],
-        use_context_hint_chunk: bool = False,
-        right_context_sizes: list = [],
-        right_context_probs: list = [],
-        freeze_subsampling_layer: bool = False,
+        macaron_style: bool = True,
+        selfattention_layer_type: str = "chunk_rel_seflattn",
+        activation_type: str = "swish",
+        use_cnn_module: bool = True,
+        cnn_module_kernel: int = 15,
+        causal: bool = False,
+        cnn_module_norm: str = "batch_norm",
+        dynamic_conv: bool = False,
+        layer_norm_type: str = 'layer_norm',
+        gradient_checkpointing: bool = False,
+        final_norm: bool = True,
+        norm_eps: float = 1e-5,
+        use_sdpa: bool = False,
+        dynamic_chunk_sizes: list = None,
+        dynamic_left_context_sizes: list = None,
+        dynamic_right_context_sizes: list = None,
     ):
-        """
+        """Construct ChunkFormerEncoder
+
         Args:
-            input_size (int): input dim
-            output_size (int): dimension of attention
-            attention_heads (int): the number of heads of multi head attention
-            linear_units (int): the hidden units number of position-wise feed
-                forward
-            num_blocks (int): the number of decoder blocks
-            dropout_rate (float): dropout rate
-            attention_dropout_rate (float): dropout rate in attention
-            positional_dropout_rate (float): dropout rate after adding
-                positional encoding
-            input_layer (str): input layer type.
-                optional [linear, conv2d, conv2d6, conv2d8]
-            pos_enc_layer_type (str): Encoder positional encoding layer type.
-                opitonal [abs_pos, scaled_abs_pos, rel_pos, no_pos]
-            normalize_before (bool):
-                True: use layer_norm before each sub-block of a layer.
-                False: use layer_norm after each sub-block of a layer.
-            static_chunk_size (int): chunk size for static chunk training and
-                decoding
-            use_dynamic_chunk (bool): whether use dynamic chunk size for
-                training or not, You can only use fixed chunk(chunk_size > 0)
-                or dyanmic chunk size(use_dynamic_chunk = True)
-            global_cmvn (Optional[torch.nn.Module]): Optional GlobalCMVN module
-            use_dynamic_left_chunk (bool): whether use dynamic left chunk in
-                dynamic chunk training
+            input_size to use_dynamic_chunk, see in BaseEncoder
+            positionwise_conv_kernel_size (int): Kernel size of positionwise
+                conv1d layer.
+            macaron_style (bool): Whether to use macaron style for
+                positionwise layer.
+            selfattention_layer_type (str): Encoder attention layer type,
+                the parameter has no effect now, it's just for configure
+                compatibility.
+            activation_type (str): Encoder activation function type.
+            use_cnn_module (bool): Whether to use convolution module.
+            cnn_module_kernel (int): Kernel size of convolution module.
+            causal (bool): whether to use causal convolution or not.
+            dynamic_chunk_sizes (list): List of chunk sizes for dynamic chunking.
+            dynamic_left_context_sizes (list): List of left context sizes for
+                dynamic chunking.
+            dynamic_right_context_sizes (list): List of right context sizes for
+                dynamic chunking.
         """
-        super().__init__()
+        torch.nn.Module.__init__(self)
+        assert selfattention_layer_type == "chunk_rel_seflattn"
+        assert pos_enc_layer_type == "chunk_rel_pos"
+        assert input_layer == "dw_striding"
+
         self._output_size = output_size
-        self.pos_enc_layer_type = pos_enc_layer_type
-        self.attention_heads = attention_heads
-        self.input_layer = input_layer
-
-
-        pos_enc_class = StreamingRelPositionalEncoding
-        subsampling_class = DepthwiseConvSubsampling
-
         self.global_cmvn = global_cmvn
-        if subsampling_class == DepthwiseConvSubsampling:
-            self.embed = subsampling_class(
-                subsampling="dw_striding",
-                subsampling_factor=8,
-                feat_in=input_size,
-                feat_out=output_size,
-                conv_channels=output_size,
-                pos_enc_class=pos_enc_class(output_size, positional_dropout_rate),
-                subsampling_conv_chunking_factor=1,
-                activation=torch.nn.ReLU(),
-                is_causal=False,
-            )
-        else:
-            self.embed = subsampling_class(
-                input_size,
-                output_size,
-                dropout_rate,
-                pos_enc_class(output_size, positional_dropout_rate),
-            )
 
+        assert layer_norm_type in ['layer_norm', 'rms_norm']
         self.normalize_before = normalize_before
-        self.after_norm = torch.nn.LayerNorm(output_size * 1, eps=1e-5)
+        self.final_norm = final_norm
+
         self.static_chunk_size = static_chunk_size
         self.use_dynamic_chunk = use_dynamic_chunk
         self.use_dynamic_left_chunk = use_dynamic_left_chunk
-        self.use_limited_chunk = use_limited_chunk
-        self.limited_decoding_chunk_sizes = torch.IntTensor(limited_decoding_chunk_sizes)
-        self.limited_left_chunk_sizes = torch.IntTensor(limited_left_chunk_sizes)
-        self.use_context_hint_chunk = use_context_hint_chunk
-        self.right_context_sizes = torch.IntTensor(right_context_sizes)
-        self.right_context_probs = torch.FloatTensor(right_context_probs)
+        self.gradient_checkpointing = gradient_checkpointing
+        self.use_sdpa = use_sdpa
 
-        if freeze_subsampling_layer:
-            self.freeze_subsampling_layer()
+        self._output_size = output_size
+        self.global_cmvn = global_cmvn
+        # NOTE(Mddct): head_dim == output_size // attention_heads for most of
+        #    speech tasks,  but for other task (LLM),
+        #    head_dim == hidden_size * attention_heads. refactor later
+
+        assert layer_norm_type in ['layer_norm', 'rms_norm']
+        self.normalize_before = normalize_before
+        self.final_norm = final_norm
+        self.after_norm = torch.nn.LayerNorm(output_size * 1, eps=1e-5)
+
+        self.static_chunk_size = static_chunk_size
+        self.use_dynamic_chunk = use_dynamic_chunk
+        self.use_dynamic_left_chunk = use_dynamic_left_chunk
+        self.gradient_checkpointing = gradient_checkpointing
+
+        self.dynamic_chunk_sizes = dynamic_chunk_sizes
+        self.dynamic_left_context_sizes = dynamic_left_context_sizes
+        self.dynamic_right_context_sizes = dynamic_right_context_sizes
+
+        self.cnn_module_kernel = cnn_module_kernel
+        activation = get_activation(activation_type)
+        self.num_blocks = num_blocks
+        self.dynamic_conv = dynamic_conv
+        self.input_size = input_size
+        self.attention_heads = attention_heads
+
+        self.embed = DepthwiseConvSubsampling(
+            subsampling=input_layer,
+            subsampling_rate=8,
+            feat_in=input_size,
+            feat_out=output_size,
+            conv_channels=output_size,
+            pos_enc_class=RelPositionalEncodingWithRightContext(
+                output_size, positional_dropout_rate),
+            subsampling_conv_chunking_factor=1,
+            activation=torch.nn.ReLU(),
+        )
 
 
-    def output_size(self) -> int:
-        return self._output_size
+        encoder_selfattn_layer = ChunkAttentionWithRelativeRightContext
+        encoder_selfattn_layer_args = (
+            attention_heads,
+            output_size,
+            attention_dropout_rate,
+        )
 
-    def freeze_subsampling_layer(self):
-        for param in self.embed.parameters():
-            param.requires_grad = False
+        # feed-forward module definition
+        positionwise_layer = PositionwiseFeedForward
+        positionwise_layer_args = (
+            output_size,
+            linear_units,
+            dropout_rate,
+            activation,
+        )
+        # convolution module definition
+        convolution_layer = ChunkConvolutionModule
+        convolution_layer_args = (output_size, cnn_module_kernel, activation,
+                                  cnn_module_norm, causal, True, dynamic_conv)
+
+        self.encoders = torch.nn.ModuleList([
+            ChunkFormerEncoderLayer(
+                size=output_size,
+                self_attn=encoder_selfattn_layer(*encoder_selfattn_layer_args),
+                feed_forward=positionwise_layer(*positionwise_layer_args),
+                feed_forward_macaron=positionwise_layer(
+                    *positionwise_layer_args) if macaron_style else None,
+                conv_module=convolution_layer(
+                    *convolution_layer_args) if use_cnn_module else None,
+                dropout_rate=dropout_rate,
+                normalize_before=normalize_before
+            ) for _ in range(num_blocks)
+        ])
     
     def forward_parallel_chunk(
         self,
@@ -146,15 +185,15 @@ class BaseEncoder(torch.nn.Module):
         chunk_size: int = -1,
         left_context_size: int = -1,
         right_context_size: int = -1,
-        att_cache: torch.Tensor = torch.zeros((0, 0, 0, 0)),
-        cnn_cache: torch.Tensor = torch.zeros((0, 0, 0, 0)),
-        truncated_context_size:int = 0,
+        att_cache: torch.Tensor = torch.zeros((0, 0, 0)),
+        cnn_cache: torch.Tensor = torch.zeros((0, 0)),
+        truncated_context_size: int = 0,
         offset: torch.Tensor = torch.zeros(0),
-        ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Embed positions in tensor.
 
         Args:
-            xs: padded input tensor (B, T, D)
+            xs: list of B input tensors (T, D)
             xs_lens: input length (B)
             decoding_chunk_size: decoding chunk size for dynamic chunk
                 0: default for training, use random dynamic chunk.
@@ -170,10 +209,14 @@ class BaseEncoder(torch.nn.Module):
             masks: torch.Tensor batch padding mask after subsample
                 (B, 1, T' ~= T/subsample_rate)
         """
-        assert offset.shape[0] == len(xs), f"{offset.shape[0]} - {len(xs)}"
-        
-        # --------------------------Chunk Batching-------------------------------------------
-        subsampling = self.embed.subsampling_factor
+        if offset.shape[0] == 0:
+            offset = torch.zeros(
+                len(xs), dtype=torch.long,
+                device=xs_origin_lens.device
+            )
+
+        # --------------------------Masked Batching----------------------------------
+        subsampling = self.embed.subsampling_rate
         context = self.embed.right_context + 1 # Add current frame
         size = (chunk_size - 1) * subsampling + context
         step = subsampling * chunk_size
@@ -181,37 +224,52 @@ class BaseEncoder(torch.nn.Module):
 
         conv_lorder = self.cnn_module_kernel // 2
 
-        upper_bounds = []
-        lower_bounds = []
+        upper_bounds_att = []
+        lower_bounds_att = []
         upper_bounds_conv = []
         lower_bounds_conv = []
         x_pad = []
         xs_lens = []
         n_chunks = []
-        for xs_origin_len, x, offs in zip(xs_origin_lens, xs, offset): # cost O(input_batch_size | ccu)
+        for xs_origin_len, x, offs in zip(xs_origin_lens, xs, offset):
             x = x.to(device)
+
+            # padding for unfold
             if x.size(0) >= size:
-                n_frames_pad = (step - ((x.size(0) - size) %  step)) % step
+                n_frames_pad = (step - ((x.size(0) - size) % step)) % step
             else:
                 n_frames_pad = size - x.size(0)
-            x = torch.nn.functional.pad(x, (0, 0, 0, n_frames_pad)) # (T, 80)
+            x = torch.nn.functional.pad(x, (0, 0, 0, n_frames_pad))  # (T, 80)
             n_chunk = ((x.size(0) - size) // step) + 1
-            x = x.unfold(0, size=size, step=step) # [n_chunk, 80, size]
+            x = x.unfold(0, size=size, step=step)  # [n_chunk, 80, size]
             x = x.transpose(2, 1)
 
-            max_len = 1  + (xs_origin_len - context)//subsampling
-            upper_bound = chunk_size + right_context_size + torch.arange(0, 1 + (xs_origin_len + n_frames_pad - context)//subsampling, 1 + (size - context)//subsampling, device=device)
-            lower_bound = upper_bound - max_len
-            upper_bound += offs
-            
-            upper_bound_conv = chunk_size + conv_lorder + torch.arange(0, 1  + (xs_origin_len + n_frames_pad - context)//subsampling, 1 + (size - context)//subsampling, device=device)
-            lower_bound_conv = torch.maximum(upper_bound_conv - max_len, torch.full_like(upper_bound_conv, conv_lorder - right_context_size))
+            # attention boundaries
+            max_len = 1 + (xs_origin_len - context) // subsampling
+            upper_bound_att = chunk_size + right_context_size + torch.arange(
+                0,
+                1 + (xs_origin_len + n_frames_pad - context) // subsampling,
+                1 + (size - context) // subsampling, device=device
+            )
+            lower_bound_att = upper_bound_att - max_len
+            upper_bound_att += offs
+
+            # convolution boundaries
+            upper_bound_conv = chunk_size + conv_lorder + torch.arange(
+                0,
+                1 + (xs_origin_len + n_frames_pad - context) // subsampling,
+                1 + (size - context) // subsampling, device=device
+            )
+            lower_bound_conv = torch.maximum(
+                upper_bound_conv - max_len,
+                torch.full_like(upper_bound_conv, conv_lorder - right_context_size)
+            )
             upper_bound_conv += offs
 
 
             xs_lens += [size] * (n_chunk - 1) + [size - n_frames_pad]
-            upper_bounds.append(upper_bound)
-            lower_bounds.append(lower_bound)
+            upper_bounds_att.append(upper_bound_att)
+            lower_bounds_att.append(lower_bound_att)
             upper_bounds_conv.append(upper_bound_conv)
             lower_bounds_conv.append(lower_bound_conv)
             x_pad.append(x)
@@ -220,8 +278,9 @@ class BaseEncoder(torch.nn.Module):
 
         xs = torch.cat(x_pad, dim=0).to(device)
         xs_lens = torch.tensor(xs_lens).to(device)
-        upper_bounds = torch.cat(upper_bounds).unsqueeze(1).to(device)
-        lower_bounds = torch.cat(lower_bounds).unsqueeze(1).to(device)
+        masks = ~make_pad_mask(xs_lens, xs.size(1)).unsqueeze(1)  # (B, 1, T)
+        upper_bounds_att = torch.cat(upper_bounds_att).unsqueeze(1).to(device)
+        lower_bounds_att = torch.cat(lower_bounds_att).unsqueeze(1).to(device)
         upper_bounds_conv = torch.cat(upper_bounds_conv).unsqueeze(1).to(device)
         lower_bounds_conv = torch.cat(lower_bounds_conv).unsqueeze(1).to(device)
 
@@ -231,30 +290,49 @@ class BaseEncoder(torch.nn.Module):
             xs = self.global_cmvn(xs)
 
 
-        xs, pos_emb, xs_lens = self.embed(xs, xs_lens, offset=left_context_size, right_context_size=right_context_size)
-        masks = ~make_pad_mask(xs_lens, xs.size(1)).unsqueeze(1)  # (B, 1, T)
-
-
-        mask_pad = torch.arange(0, conv_lorder + chunk_size + conv_lorder, device=masks.device).unsqueeze(0).repeat(xs.size(0), 1) # [B, left_context_size + chunksize]
+        xs, pos_emb, masks = self.embed(
+            xs, masks,
+            offset=left_context_size,
+            right_context_size=right_context_size
+        )
+        # convolution mask
+        # [B, left_context_size + chunksize]
+        mask_pad = torch.arange(
+            0,
+            conv_lorder + chunk_size + conv_lorder,
+            device=masks.device
+        ).unsqueeze(0).repeat(xs.size(0), 1)
         mask_pad = (lower_bounds_conv <= mask_pad) & (mask_pad < upper_bounds_conv)
         mask_pad = mask_pad.flip(-1).unsqueeze(1)
-        att_mask = torch.arange(0, left_context_size + chunk_size + right_context_size, device=masks.device).unsqueeze(0).repeat(xs.size(0), 1) # [B, left_context_size + chunksize]
-        att_mask = (lower_bounds <= att_mask) & (att_mask < upper_bounds)
-        att_mask = att_mask.flip(-1).unsqueeze(1)
 
+        # attention mask
+        # [B, left_context_size + chunksize]
+        att_mask = torch.arange(
+            0,
+            left_context_size + chunk_size + right_context_size,
+            device=masks.device
+        ).unsqueeze(0).repeat(xs.size(0), 1)
+        att_mask = (lower_bounds_att <= att_mask) & (att_mask < upper_bounds_att)
+        att_mask = att_mask.flip(-1).unsqueeze(1)
 
         r_att_cache = []
         r_cnn_cache = []
+        att_cache = att_cache.to(device)
+        cnn_cache = cnn_cache.to(device)
+
         for i, layer in enumerate(self.encoders):
-            xs, _, new_att_cache, new_cnn_cache = layer.forward_parallel_chunk(xs, att_mask, pos_emb, 
+            xs, _, new_att_cache, new_cnn_cache = layer.forward_parallel_chunk(
+                xs,
+                att_mask,
+                pos_emb,
                 mask_pad=mask_pad,
                 right_context_size=right_context_size,
                 left_context_size=left_context_size,
-                att_cache=att_cache[i].to(device) if att_cache.size(0) > 0 else att_cache,
-                cnn_cache=cnn_cache[i].to(device) if cnn_cache.size(0) > 0 else cnn_cache,
-                truncated_context_size=truncated_context_size
-
+                att_cache=att_cache[i] if att_cache.size(0) > 0 else att_cache,
+                cnn_cache=cnn_cache[i] if cnn_cache.size(0) > 0 else cnn_cache,
+                truncated_context_size=truncated_context_size,
             )
+
             r_att_cache.append(new_att_cache)
             r_cnn_cache.append(new_cnn_cache)
 
@@ -283,136 +361,3 @@ class BaseEncoder(torch.nn.Module):
             hyps = hyps.split(n_chunks, dim=0)   
             hyps = [hyp.flatten()[:x_len] for hyp, x_len in zip(hyps, xs_lens)]
         return hyps  
-
-
-    def rearrange(
-        self, 
-        xs,
-        xs_lens,
-        n_chunks
-    ):
-        xs = xs.split(n_chunks, dim=0)   
-        xs_lens = self.embed.calc_length(xs_lens)
-        xs = [x.reshape(-1, self._output_size)[:x_len] for x, x_len in zip(xs, xs_lens)]
-
-
-
-        xs = torch.nn.utils.rnn.pad_sequence(xs,
-                                    batch_first=True,
-                                    padding_value=0)
-        masks = ~make_pad_mask(xs_lens, xs.size(1)).unsqueeze(1).to(xs.device) # (B, 1, T)
-        return xs, masks
-
-class ChunkFormerEncoder(BaseEncoder):
-    """ChunkFormer encoder module."""
-    def __init__(
-        self,
-        input_size: int,
-        output_size: int = 256,
-        attention_heads: int = 4,
-        linear_units: int = 2048,
-        num_blocks: int = 6,
-        dropout_rate: float = 0.1,
-        positional_dropout_rate: float = 0.1,
-        attention_dropout_rate: float = 0.0,
-        input_layer: str = "conv2d",
-        pos_enc_layer_type: str = "rel_pos",
-        normalize_before: bool = True,
-        static_chunk_size: int = 0,
-        use_dynamic_chunk: bool = False,
-        global_cmvn: torch.nn.Module = None,
-        use_dynamic_left_chunk: bool = False,
-        positionwise_conv_kernel_size: int = 1,
-        macaron_style: bool = True,
-        selfattention_layer_type: str = "rel_selfattn",
-        activation_type: str = "swish",
-        use_cnn_module: bool = True,
-        cnn_module_kernel: int = 15,
-        causal: bool = False,
-        cnn_module_norm: str = "batch_norm",
-        use_limited_chunk: bool = False,
-        limited_decoding_chunk_sizes: list = [],
-        limited_left_chunk_sizes: list = [],
-        use_dynamic_conv: bool = False,
-        use_context_hint_chunk: bool = False,
-        right_context_sizes: list = [],
-        right_context_probs: list = [],
-        freeze_subsampling_layer: bool = False,
-    ):
-        """Construct ChunkFormerEncoder
-
-        Args:
-            input_size to use_dynamic_chunk, see in BaseEncoder
-            positionwise_conv_kernel_size (int): Kernel size of positionwise
-                conv1d layer.
-            macaron_style (bool): Whether to use macaron style for
-                positionwise layer.
-            selfattention_layer_type (str): Encoder attention layer type,
-                the parameter has no effect now, it's just for configure
-                compatibility.
-            activation_type (str): Encoder activation function type.
-            use_cnn_module (bool): Whether to use convolution module.
-            cnn_module_kernel (int): Kernel size of convolution module.
-            causal (bool): whether to use causal convolution or not.
-        """
-        super().__init__(input_size, output_size, attention_heads,
-                         linear_units, num_blocks, dropout_rate,
-                         positional_dropout_rate, attention_dropout_rate,
-                         input_layer, pos_enc_layer_type, normalize_before,
-                         static_chunk_size, use_dynamic_chunk,
-                         global_cmvn, use_dynamic_left_chunk, 
-                         use_limited_chunk=use_limited_chunk,
-                         limited_decoding_chunk_sizes=limited_decoding_chunk_sizes,
-                         limited_left_chunk_sizes=limited_left_chunk_sizes,
-                         use_context_hint_chunk=use_context_hint_chunk,
-                         right_context_sizes=right_context_sizes,
-                         right_context_probs=right_context_probs,
-                         freeze_subsampling_layer=freeze_subsampling_layer)
-        self.cnn_module_kernel = cnn_module_kernel
-        activation = get_activation(activation_type)
-        self.num_blocks = num_blocks
-        self.use_dynamic_conv = use_dynamic_conv
-        self.input_size = input_size
-        self.attention_heads = attention_heads
-
-        # self-attention module definition
-        if pos_enc_layer_type == "abs_pos":
-            encoder_selfattn_layer = MultiHeadedAttention
-        elif pos_enc_layer_type == "rel_pos":
-            encoder_selfattn_layer = RelPositionMultiHeadedAttention
-        elif pos_enc_layer_type == "stream_rel_pos":
-            encoder_selfattn_layer = StreamingRelPositionMultiHeadedAttention
-        
-        encoder_selfattn_layer_args = (
-            attention_heads,
-            output_size,
-            attention_dropout_rate,
-        )
-
-        # feed-forward module definition
-        positionwise_layer = PositionwiseFeedForward
-        positionwise_layer_args = (
-            output_size,
-            linear_units,
-            dropout_rate,
-            activation,
-        )
-        # convolution module definition
-        convolution_layer = ConvolutionModule
-        convolution_layer_args = (output_size, cnn_module_kernel, activation,
-                                  cnn_module_norm, causal, True, use_dynamic_conv)
-
-        self.encoders = torch.nn.ModuleList([
-            ChunkFormerEncoderLayer(
-                output_size,
-                encoder_selfattn_layer(*encoder_selfattn_layer_args),
-                positionwise_layer(*positionwise_layer_args),
-                positionwise_layer(
-                    *positionwise_layer_args) if macaron_style else None,
-                convolution_layer(
-                    *convolution_layer_args) if use_cnn_module else None,
-                dropout_rate,
-                normalize_before,
-                aggregate=2 if ((i % 3 == 0) and  (i > 0)) else 1
-            ) for i in range(num_blocks)
-        ])
