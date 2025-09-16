@@ -55,7 +55,7 @@ def endless_decode(args, model, char_dict):
     device = next(model.parameters()).device
     audio_path = args.long_form_audio
     # model configuration
-    subsampling_factor = model.encoder.embed.subsampling_factor
+    subsampling_factor = model.encoder.embed.subsampling_rate
     chunk_size = args.chunk_size
     left_context_size = args.left_context_size
     right_context_size = args.right_context_size
