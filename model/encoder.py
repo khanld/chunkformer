@@ -29,7 +29,8 @@ from model.positionwise_feed_forward import PositionwiseFeedForward
 from model.subsampling import DepthwiseConvSubsampling
 from model.utils.common import get_activation
 from model.utils.mask import make_pad_mask
-class ChunkFormerEncoder(BaseEncoder):
+
+class ChunkFormerEncoder(torch.nn.Module):
     """ChunkFormer encoder module."""
     def __init__(
         self,
@@ -292,7 +293,8 @@ class ChunkFormerEncoder(BaseEncoder):
 
         xs, pos_emb, masks = self.embed(
             xs, masks,
-            offset=left_context_size,
+            chunk_size=chunk_size,
+            left_context_size=left_context_size,
             right_context_size=right_context_size
         )
         # convolution mask

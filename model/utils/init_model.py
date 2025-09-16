@@ -39,7 +39,7 @@ def init_model(configs, config_path):
                                 global_cmvn=global_cmvn,
                                 **configs['encoder_conf'])
 
-    ctc = CTC(vocab_size, encoder.output_size())
+    ctc = CTC(vocab_size, encoder._output_size)
 
     model = ASRModel(vocab_size=vocab_size,
                         encoder=encoder,
