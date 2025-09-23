@@ -1,9 +1,0 @@
-Pillow
-pyyaml
-sentencepiece
-textgrid
-pandas
-jiwer
-huggingface_hub
-colorama
-pydub
