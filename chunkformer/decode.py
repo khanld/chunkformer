@@ -10,10 +10,10 @@ from tqdm import tqdm
 from colorama import Fore, Style
 
 import torchaudio.compliance.kaldi as kaldi
-from chunkformer.model.utils.init_model import init_model
-from chunkformer.model.utils.checkpoint import load_checkpoint
-from chunkformer.model.utils.file_utils import read_symbol_table
-from chunkformer.model.utils.ctc_utils import get_output_with_timestamps, get_output
+from .model.utils.init_model import init_model
+from .model.utils.checkpoint import load_checkpoint
+from .model.utils.file_utils import read_symbol_table
+from .model.utils.ctc_utils import get_output_with_timestamps, get_output
 from contextlib import nullcontext
 from pydub import AudioSegment
 

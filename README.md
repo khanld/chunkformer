@@ -50,14 +50,6 @@ cd chunkformer
 
 # Install in development mode
 pip install -e .
-
-# Or install normally
-pip install .
-```
-
-### Option 3: Install with development dependencies
-```bash
-pip install -e ".[dev]"
 ```
 
 #### Checkpoints
@@ -123,7 +115,7 @@ After installation, you can use the command line interface:
 ```bash
 chunkformer-decode \
     --model_checkpoint path/to/local/hf/checkpoint/repo \
-    --long_form_audio path/to/audio.wav \
+    --long_form_audio data/common_voice_vi_23397238.wav \
     --total_batch_duration 14400 \
     --chunk_size 64 \
     --left_context_size 128 \

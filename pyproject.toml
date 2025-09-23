@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "chunkformer"
 version = "0.1.0"
 authors = [
-    {name = "khanhld", email = "your-email@example.com"},
+    {name = "khanld", email = "khanhld218@gmail.com"},
 ]
 description = "ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription"
 readme = "README.md"
@@ -35,14 +35,12 @@ dependencies = [
     "jiwer>=2.3.0",
     "colorama>=0.4.4",
     "pydub>=0.25.0",
-    "Pillow>=8.3.0",
-    "sentencepiece>=0.1.96",
-    "textgrid>=1.5.0",
     "huggingface_hub>=0.10.0",
 ]
 keywords = [
     "speech-recognition",
     "asr",
+    "chunkformer",
     "transformer",
     "conformer", 
     "pytorch",
@@ -58,33 +56,21 @@ dev = [
     "flake8>=3.9.0",
     "isort>=5.9.0",
 ]
-docs = [
-    "sphinx>=4.0.0",
-    "sphinx-rtd-theme>=0.5.0",
-]
 
 [project.scripts]
 chunkformer-decode = "chunkformer.decode:main"
 
 [project.urls]
-Homepage = "https://github.com/your-username/chunkformer"
-Documentation = "https://github.com/your-username/chunkformer/blob/main/README.md"
-Repository = "https://github.com/your-username/chunkformer"
-"Bug Reports" = "https://github.com/your-username/chunkformer/issues"
-Paper = "https://github.com/your-username/chunkformer/blob/main/docs/paper.pdf"
+Homepage = "https://github.com/khanld/chunkformer"
+Documentation = "https://github.com/khanld/chunkformer/blob/main/README.md"
+Repository = "https://github.com/khanld/chunkformer"
+"Bug Reports" = "https://github.com/khanld/chunkformer/issues"
+Paper = "https://github.com/khanld/chunkformer/blob/main/docs/paper.pdf"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["chunkformer*"]
 exclude = ["tests*"]
-
-[tool.setuptools.package-data]
-chunkformer = [
-    "chunkformer-large-vie/*",
-    "chunkformer-large-vie-hf/*", 
-    "data/*",
-    "docs/*",
-]
 
 [tool.black]
 line-length = 100

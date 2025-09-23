@@ -3,7 +3,7 @@
 
 import torch
 import math
-from model.utils.mask import make_pad_mask
+from .utils.mask import make_pad_mask
 
 class DepthwiseConvSubsampling(torch.nn.Module):
     """

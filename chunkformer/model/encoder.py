@@ -21,14 +21,14 @@ import torch
 import math
 
 
-from model.attention import ChunkAttentionWithRelativeRightContext
-from model.convolution import ChunkConvolutionModule
-from model.embedding import RelPositionalEncodingWithRightContext
-from model.encoder_layer import ChunkFormerEncoderLayer
-from model.positionwise_feed_forward import PositionwiseFeedForward
-from model.subsampling import DepthwiseConvSubsampling
-from model.utils.common import get_activation
-from model.utils.mask import make_pad_mask
+from .attention import ChunkAttentionWithRelativeRightContext
+from .convolution import ChunkConvolutionModule
+from .embedding import RelPositionalEncodingWithRightContext
+from .encoder_layer import ChunkFormerEncoderLayer
+from .positionwise_feed_forward import PositionwiseFeedForward
+from .subsampling import DepthwiseConvSubsampling
+from .utils.common import get_activation
+from .utils.mask import make_pad_mask
 
 class ChunkFormerEncoder(torch.nn.Module):
     """ChunkFormer encoder module."""

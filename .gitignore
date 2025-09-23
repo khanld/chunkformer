@@ -1,10 +1,177 @@
-checkpoints
-data/dev-other
+# Python
 __pycache__/
-decode_chunkformer_tmp.py
-data/dev-other.tsv
-data/lf_data.tsv
-decode_tmp.py
-tokenizer/
-data/4397800.wav
-benchmark_duration.py
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Machine Learning & Model Files
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+*.safetensors
+checkpoints/
+models/
+weights/
+*.onnx
+*.tflite
+*.pb
+
+# Data files
+*.wav
+*.mp3
+*.mp4
+*.avi
+*.mov
+*.flac
+*.ogg
+*.aac
+*.m4a
+data/
+datasets/
+*.tsv
+*.csv
+*.json
+*.txt
+*.jsonl
+*.parquet
+*.feather
+
+# Temporary files
+*.tmp
+*.temp
+*_tmp.py
+*_temp.py
+
+# Logs
+*.log
+*.out
+logs/
+log/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+
+# HuggingFace cache
+.cache/
+transformers_cache/
+

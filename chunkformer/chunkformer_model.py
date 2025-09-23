@@ -13,6 +13,14 @@ from transformers.utils import logging
 from tqdm import tqdm
 
 try:
+    from huggingface_hub import hf_hub_download, snapshot_download
+    HF_HUB_AVAILABLE = True
+except ImportError:
+    HF_HUB_AVAILABLE = False
+    hf_hub_download = None
+    snapshot_download = None
+
+try:
     from pydub import AudioSegment
     PYDUB_AVAILABLE = True
 except ImportError:
@@ -150,11 +158,11 @@ class ChunkFormerModel(PreTrainedModel):
     
     def _init_model_from_config(self):
         """Initialize model from config without file dependencies."""
-        from model.asr_model import ASRModel
-        from model.cmvn import GlobalCMVN
-        from model.ctc import CTC
-        from model.encoder import ChunkFormerEncoder
-        from model.utils.cmvn import load_cmvn
+        from .model.asr_model import ASRModel
+        from .model.cmvn import GlobalCMVN
+        from .model.ctc import CTC
+        from .model.encoder import ChunkFormerEncoder
+        from .model.utils.cmvn import load_cmvn
         
         # Handle CMVN
         global_cmvn = None
@@ -226,37 +234,54 @@ class ChunkFormerModel(PreTrainedModel):
         pretrained_model_name_or_path: Union[str, os.PathLike],
         *model_args,
         config: Optional[ChunkFormerConfig] = None,
+        cache_dir: Optional[str] = None,
+        force_download: bool = False,
         **kwargs
     ):
         """
         Load a pretrained ChunkFormer model.
         
         Args:
-            pretrained_model_name_or_path: Path to the pretrained model directory
+            pretrained_model_name_or_path: Path to the pretrained model directory or HuggingFace model identifier
             config: Model configuration
+            cache_dir: Directory to cache downloaded models
+            force_download: Whether to force download even if cached
             **kwargs: Additional arguments
         """
-        # If config is not provided, try to load from config.yaml
+        # Check if it's a local path or HuggingFace model identifier
+        is_local = os.path.isdir(pretrained_model_name_or_path)
+        
+        if not is_local and HF_HUB_AVAILABLE:
+            # Try to download from HuggingFace Hub
+            try:
+                logger.info(f"Downloading model from HuggingFace Hub: {pretrained_model_name_or_path}")
+                model_path = snapshot_download(
+                    repo_id=pretrained_model_name_or_path,
+                    cache_dir=cache_dir,
+                    force_download=force_download,
+                    **kwargs
+                )
+                pretrained_model_name_or_path = model_path
+                logger.info(f"Model downloaded to: {model_path}")
+            except Exception as e:
+                logger.warning(f"Failed to download from HuggingFace Hub: {e}")
+                # Fall through to treat as local path
+                pass
+        elif not is_local and not HF_HUB_AVAILABLE:
+            logger.warning("huggingface_hub not available. Treating as local path.")
+        
+        # If config is not provided, try to load from config files
         if config is None:
+            # Try config.yaml first (original ChunkFormer format)
             config_path = os.path.join(pretrained_model_name_or_path, "config.yaml")
             if os.path.exists(config_path):
                 config = ChunkFormerConfig.from_yaml_config(config_path)
-                
-                # Check for CMVN file in the model directory if not absolute path
-                if config.cmvn_file and not os.path.isabs(config.cmvn_file):
-                    cmvn_path = os.path.join(pretrained_model_name_or_path, config.cmvn_file)
-                    if os.path.exists(cmvn_path):
-                        config.cmvn_file = cmvn_path
-                    else:
-                        # Try common CMVN file names
-                        for cmvn_name in ["global_cmvn", "cmvn.ark", "global_cmvn.json"]:
-                            cmvn_path = os.path.join(pretrained_model_name_or_path, cmvn_name)
-                            if os.path.exists(cmvn_path):
-                                config.cmvn_file = cmvn_path
-                                break
-                        else:
-                            print(f"Warning: CMVN file {config.cmvn_file} not found in {pretrained_model_name_or_path}")
-                            config.cmvn_file = None
+                cmvn_path = os.path.join(pretrained_model_name_or_path, "global_cmvn")
+                if os.path.exists(cmvn_path):
+                    config.cmvn_file = cmvn_path
+                else:
+                    logger.warning(f"CMVN file {config.cmvn_file} not found in {pretrained_model_name_or_path}")
+                    config.cmvn_file = None
             else:
                 # Try to load from config.json (HuggingFace format)
                 config_json_path = os.path.join(pretrained_model_name_or_path, "config.json")
@@ -268,24 +293,16 @@ class ChunkFormerModel(PreTrainedModel):
         # Initialize model
         model = cls(config)
         
-        # Load weights
+        # Load weights - try multiple checkpoint formats
         checkpoint_path = os.path.join(pretrained_model_name_or_path, "pytorch_model.bin")
         if not os.path.exists(checkpoint_path):
-            # Try alternative checkpoint names
-            alt_paths = [
-                os.path.join(pretrained_model_name_or_path, "avg_75.pt"),
-                os.path.join(pretrained_model_name_or_path, "model.pt"),
-            ]
-            for alt_path in alt_paths:
-                if os.path.exists(alt_path):
-                    checkpoint_path = alt_path
-                    break
-            else:
-                raise ValueError(f"No checkpoint found in {pretrained_model_name_or_path}")
+            raise ValueError(f"No checkpoint found in {pretrained_model_name_or_path}. Expected one of: {[os.path.basename(c) for c in checkpoint_candidates]}")
         
         # Load checkpoint using original ChunkFormer loading function
+        logger.info(f"Loading checkpoint from: {checkpoint_path}")
         load_checkpoint(model.model, checkpoint_path)
         model.model.eval()
+        
         # Load symbol table if available
         vocab_path = os.path.join(pretrained_model_name_or_path, "vocab.txt")
         if os.path.exists(vocab_path):

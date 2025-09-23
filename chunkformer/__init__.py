@@ -6,10 +6,11 @@ that efficiently handles long-form audio transcription on low-memory GPUs.
 """
 
 __version__ = "0.1.0"
-__author__ = "khanhld"
-__email__ = "your-email@example.com"
+__author__ = "khanld"
+__email__ = "khanhld218@gmail.com"
 
-from .chunkformer import ChunkFormerModel, ChunkFormerConfig, ChunkFormerDecoder
+from .chunkformer_model import ChunkFormerModel, ChunkFormerConfig
+from .decode import ChunkFormerDecoder
 
 __all__ = [
     "ChunkFormerModel",
