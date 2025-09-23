@@ -14,7 +14,13 @@ This repository contains the implementation and supplementary materials for our 
 - [Introduction](#introduction)
 - [Key Features](#key-features)
 - [Installation](#installation)
+  - [Install from PyPI (Recommended)](#option-1-install-from-pypi-recommended)
+  - [Install from source](#option-2-install-from-source)
+  - [Pretrained Models](#pretrained-models)
 - [Usage](#usage)
+  - [Python API Usage](#python-api-usage)
+  - [Command Line Usage](#command-line-usage)
+- [Training the Model](#training)
 - [Citation](#citation)
 - [Acknowledgments](#acknowledgments)
 
@@ -52,28 +58,21 @@ cd chunkformer
 pip install -e .
 ```
 
-#### Checkpoints
+### Pretrained Models
 | Language | Model |
 |----------|-------|
 | Vietnamese  | [khanhld/chunkformer-large-vie](https://huggingface.co/khanhld/chunkformer-large-vie) |
 | English   | [khanhld/chunkformer-large-en-libri-960h](https://huggingface.co/khanhld/chunkformer-large-en-libri-960h) |
-
-
-#### Dependencies
-The package will automatically install all required dependencies including PyTorch, transformers, and other necessary libraries.
 
 <a name = "usage" ></a>
 ## Usage
 
 ### Python API Usage
 ```python
-import chunkformer
+from chunkformer import ChunkFormerModel
 
 # Option 1: Load a pre-trained model from Hugging Face or local directory
-model = chunkformer.ChunkFormerModel.from_pretrained("khanhld/chunkformer-large-vie")
-
-# Option 2: Load from local checkpoint directory 
-model = chunkformer.ChunkFormerModel.from_pretrained("path/to/model/checkpoint")
+model = ChunkFormerModel.from_pretrained("khanhld/chunkformer-large-vie")
 
 # For single long-form audio transcription
 transcription = model.endless_decode(
@@ -99,49 +98,17 @@ transcriptions = model.batch_decode(
 for i, transcription in enumerate(transcriptions):
     print(f"Audio {i+1}: {transcription}")
 
-# For custom configuration
-config = chunkformer.ChunkFormerConfig(
-    chunk_size=32,
-    left_context_size=64,
-    right_context_size=64,
-    vocab_size=4992
-)
-model = chunkformer.ChunkFormerModel(config)
 ```
 
 ### Command Line Usage
 After installation, you can use the command line interface:
 
-```bash
-chunkformer-decode \
-    --model_checkpoint path/to/local/hf/checkpoint/repo \
-    --long_form_audio data/common_voice_vi_23397238.wav \
-    --total_batch_duration 14400 \
-    --chunk_size 64 \
-    --left_context_size 128 \
-    --right_context_size 128
-```
-
-#### Training the Model
-For training/finetuning, follow this [PR](https://github.com/wenet-e2e/wenet/pull/2723).
-
 #### Long-Form Audio Testing
 To test the model with a single [long-form audio file](data/common_voice_vi_23397238.wav). Audio file extensions ".mp3", ".wav", ".flac", ".m4a", ".aac" are accepted:
 ```bash
-python decode.py \
-    --model_checkpoint path/to/local/hf/checkpoint/repo \
-    --long_form_audio path/to/audio.wav \
-    --total_batch_duration 14400 \ #in second, default is 1800
-    --chunk_size 64 \
-    --left_context_size 128 \
-    --right_context_size 128
-```
-
-Or using the command line tool:
-```bash
 chunkformer-decode \
-    --model_checkpoint path/to/local/hf/checkpoint/repo \
-    --long_form_audio path/to/audio.wav \
+    --model_checkpoint khanhld/chunkformer-large-vie \
+    --long_form_audio /home/khanhle/workdir/ASR/ASR/chunkformer/data/common_voice_vi_23397238.wav \
     --total_batch_duration 14400 \
     --chunk_size 64 \
     --left_context_size 128 \
@@ -157,19 +124,8 @@ Example Output:
 The [audio_list.tsv](data/audio_list.tsv) file must have at least one column named **wav**. Optionally, a column named **txt** can be included to compute the **Word Error Rate (WER)**. Output will be saved to the same file.
 
 ```bash
-python decode.py \
-    --model_checkpoint path/to/local/hf/checkpoint/repo \
-    --audio_list path/to/audio_list.tsv \
-    --total_batch_duration 14400 \ #in second, default is 1800
-    --chunk_size 64 \
-    --left_context_size 128 \
-    --right_context_size 128
-```
-
-Or using the command line tool:
-```bash
 chunkformer-decode \
-    --model_checkpoint path/to/local/hf/checkpoint/repo \
+    --model_checkpoint path/to/hf/checkpoint/repo \
     --audio_list path/to/audio_list.tsv \
     --total_batch_duration 14400 \
     --chunk_size 64 \
@@ -182,6 +138,62 @@ WER: 0.1234
 ```
 
 ---
+
+<a name = "training" ></a>
+## Training
+For training/finetuning ChunkFormer models, follow the implementation in this [WeNet PR](https://github.com/wenet-e2e/wenet/pull/2723).
+
+### Setting Up Your Model for Inference
+After training is complete, you need to prepare your model for use with this library. Follow these steps:
+
+#### Step 1: Create Model Directory
+```bash
+mkdir my_chunkformer_model
+cd my_chunkformer_model
+```
+
+#### Step 2: Copy Required Files
+Copy the following files from your training output to the model directory:
+
+1. **Model Checkpoint**
+   ```bash
+   # Supported formats: .pt, .ckpt, .bin. 
+   # Wenet uses .pt by default
+   cp /path/to/your/final.pt pytorch_model.pt
+   ```
+
+2. **Training Configuration**
+   ```bash
+   cp /path/to/your/train.yaml config.yaml
+   ```
+
+3. **CMVN Statistics**
+   ```bash
+   cp /path/to/your/global_cmvn global_cmvn
+   ```
+
+4. **Vocabulary File (_units.txt)**:
+   ```bash
+   cp /path/to/your/_units.txt vocab.txt
+   ```
+
+#### Step 3: Verify Model Structure
+Your model directory should look like this:
+```
+my_chunkformer_model/
+├── pytorch_model.pt (or .ckpt/.bin)
+├── config.yaml
+├── global_cmvn
+└── vocab.txt
+```
+
+#### Step 4: Test Your Local Model Directory
+```python
+import chunkformer
+model = chunkformer.ChunkFormerModel.from_pretrained("./my_chunkformer_model")
+result = model.endless_decode("test_audio.wav")
+print(result)
+```
 
 <a name = "citation" ></a>
 ## Citation

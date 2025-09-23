@@ -10,11 +10,9 @@ __author__ = "khanld"
 __email__ = "khanhld218@gmail.com"
 
 from .chunkformer_model import ChunkFormerModel, ChunkFormerConfig
-from .decode import ChunkFormerDecoder
 
 __all__ = [
     "ChunkFormerModel",
     "ChunkFormerConfig", 
-    "ChunkFormerDecoder",
     "__version__"
 ]

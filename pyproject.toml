@@ -58,7 +58,7 @@ dev = [
 ]
 
 [project.scripts]
-chunkformer-decode = "chunkformer.decode:main"
+chunkformer-decode = "chunkformer.chunkformer_model:main"
 
 [project.urls]
 Homepage = "https://github.com/khanld/chunkformer"

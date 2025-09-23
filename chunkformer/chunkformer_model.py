@@ -7,10 +7,15 @@ import yaml
 import json
 import torchaudio
 import torchaudio.compliance.kaldi as kaldi
+import jiwer
+import argparse
+import pandas as pd
 from typing import Dict, Any, Optional, Union, List
 from transformers import PreTrainedModel, PretrainedConfig
 from transformers.utils import logging
 from tqdm import tqdm
+from contextlib import nullcontext
+from colorama import Fore, Style
 
 try:
     from huggingface_hub import hf_hub_download, snapshot_download
@@ -294,9 +299,21 @@ class ChunkFormerModel(PreTrainedModel):
         model = cls(config)
         
         # Load weights - try multiple checkpoint formats
-        checkpoint_path = os.path.join(pretrained_model_name_or_path, "pytorch_model.bin")
-        if not os.path.exists(checkpoint_path):
-            raise ValueError(f"No checkpoint found in {pretrained_model_name_or_path}. Expected one of: {[os.path.basename(c) for c in checkpoint_candidates]}")
+        checkpoint_candidates = [
+            "pytorch_model.bin",
+            "pytorch_model.pt", 
+            "pytorch_model.ckpt"
+        ]
+        
+        checkpoint_path = None
+        for candidate in checkpoint_candidates:
+            candidate_path = os.path.join(pretrained_model_name_or_path, candidate)
+            if os.path.exists(candidate_path):
+                checkpoint_path = candidate_path
+                break
+        
+        if checkpoint_path is None:
+            raise ValueError(f"No checkpoint found in {pretrained_model_name_or_path}. Expected one of: {checkpoint_candidates}")
         
         # Load checkpoint using original ChunkFormer loading function
         logger.info(f"Loading checkpoint from: {checkpoint_path}")
@@ -648,7 +665,138 @@ class ChunkFormerModel(PreTrainedModel):
         
         return decodes
 
-
 # Register the configuration and model
 ChunkFormerConfig.register_for_auto_class()
 ChunkFormerModel.register_for_auto_class("AutoModel")
+
+
+def main():
+    """Main function for command line interface."""
+    # Create argument parser
+    parser = argparse.ArgumentParser(description="ChunkFormer ASR inference with command line interface.")
+
+    # Add arguments with default values
+    parser.add_argument(
+        "--model_checkpoint", 
+        type=str, 
+        default=None, 
+        help="Path to Huggingface checkpoint repo"
+    )
+    parser.add_argument(
+        "--total_batch_duration", 
+        type=int, 
+        default=1800, 
+        help="The total audio duration (in second) in a batch that your GPU memory can handle at once. Default is 1800s"
+    )
+    parser.add_argument(
+        "--chunk_size", 
+        type=int, 
+        default=64, 
+        help="Size of the chunks (default: 64)"
+    )
+    parser.add_argument(
+        "--left_context_size", 
+        type=int, 
+        default=128, 
+        help="Size of the left context (default: 128)"
+    )
+    parser.add_argument(
+        "--right_context_size", 
+        type=int, 
+        default=128, 
+        help="Size of the right context (default: 128)"
+    )
+    parser.add_argument(
+        "--long_form_audio", 
+        type=str, 
+        default=None, 
+        help="Path to the long audio file (default: None)"
+    )
+    parser.add_argument(
+        "--audio_list", 
+        type=str, 
+        default=None, 
+        required=False, 
+        help="Path to the TSV file containing the audio list. The TSV file must have one column named 'wav'. If 'txt' column is provided, Word Error Rate (WER) is computed"
+    )
+    parser.add_argument(
+        "--full_attn", 
+        action="store_true",
+        help="Whether to use full attention with caching. If not provided, limited-chunk attention will be used (default: False)"
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda" if torch.cuda.is_available() else "cpu",
+        help="Device to run the model on (default: cuda if available else cpu)"
+    )
+    parser.add_argument(
+        "--autocast_dtype",
+        type=str,
+        choices=["fp32", "bf16", "fp16"],
+        default=None,
+        help="Dtype for autocast. If not provided, autocast is disabled by default."
+    )
+
+    # Parse arguments
+    args = parser.parse_args()
+    device = torch.device(args.device)
+    dtype = {"fp32": torch.float32, "bf16": torch.bfloat16, "fp16": torch.float16, None: None}[args.autocast_dtype]
+
+    # Print the arguments
+    print(f"Model Checkpoint: {args.model_checkpoint}")
+    print(f"Device: {device}")
+    print(f"Total Duration in a Batch (in second): {args.total_batch_duration}")
+    print(f"Chunk Size: {args.chunk_size}")
+    print(f"Left Context Size: {args.left_context_size}")
+    print(f"Right Context Size: {args.right_context_size}")
+    print(f"Long Form Audio Path: {args.long_form_audio}")
+    print(f"Audio List Path: {args.audio_list}")
+    
+    assert args.model_checkpoint is not None, "You must specify the path to the model"
+    assert args.long_form_audio or args.audio_list, "`long_form_audio` or `audio_list` must be activated"
+
+    # Load model using HuggingFace interface
+    print("Loading model using HuggingFace interface...")
+    model = ChunkFormerModel.from_pretrained(args.model_checkpoint)
+    model = model.to(device)
+    model.eval()
+    
+    # Perform inference
+    with torch.autocast(device.type, dtype) if dtype is not None else nullcontext():
+        if args.long_form_audio:
+            decode = model.endless_decode(
+                args.long_form_audio,
+                chunk_size=args.chunk_size,
+                left_context_size=args.left_context_size,
+                right_context_size=args.right_context_size,
+                total_batch_duration=args.total_batch_duration
+            )
+            for item in decode:
+                start = f"{Fore.RED}{item['start']}{Style.RESET_ALL}"
+                end = f"{Fore.RED}{item['end']}{Style.RESET_ALL}"
+                print(f"{start} - {end}: {item['decode']}")
+        else:
+            # Batch decode using HF model interface
+            df = pd.read_csv(audio_list_path, sep="\t")
+            audio_paths = df['wav'].to_list()
+            
+            decodes = model.batch_decode(
+                args.audio_list,
+                chunk_size=args.chunk_size,
+                left_context_size=args.left_context_size,
+                right_context_size=args.right_context_size,
+                total_batch_duration=args.total_batch_duration
+            )
+            df['decode'] = decodes
+            if "txt" in df.columns:
+                wer = jiwer.wer(df["txt"].to_list(), decodes)
+                print(f"Word Error Rate (WER): {wer:.4f}")
+            
+            # Save results
+            df.to_csv(audio_list_path, sep="\t", index=False)
+            print(f"Results saved to {audio_list_path}")
+
+
+if __name__ == "__main__":
+    main()
