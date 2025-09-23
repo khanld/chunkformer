@@ -3,9 +3,6 @@ from chunkformer import ChunkFormerModel
 # Option 1: Load a pre-trained model from Hugging Face or local directory
 model = ChunkFormerModel.from_pretrained("khanhld/chunkformer-large-vie")
 
-# # Option 2: Load from local checkpoint directory 
-# model = chunkformer.ChunkFormerModel.from_pretrained("path/to/model/checkpoint")
-
 # For single long-form audio transcription
 transcription = model.endless_decode(
     audio_path="/home/khanhle/workdir/ASR/ASR/chunkformer/data/common_voice_vi_23397238.wav",

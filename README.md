@@ -71,7 +71,7 @@ pip install -e .
 ```python
 from chunkformer import ChunkFormerModel
 
-# Option 1: Load a pre-trained model from Hugging Face or local directory
+# Load a pre-trained model from Hugging Face or local directory
 model = ChunkFormerModel.from_pretrained("khanhld/chunkformer-large-vie")
 
 # For single long-form audio transcription
@@ -108,7 +108,7 @@ To test the model with a single [long-form audio file](data/common_voice_vi_2339
 ```bash
 chunkformer-decode \
     --model_checkpoint khanhld/chunkformer-large-vie \
-    --long_form_audio /home/khanhle/workdir/ASR/ASR/chunkformer/data/common_voice_vi_23397238.wav \
+    --long_form_audio path/to/audio.wav \
     --total_batch_duration 14400 \
     --chunk_size 64 \
     --left_context_size 128 \
