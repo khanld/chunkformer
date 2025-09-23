@@ -1,0 +1,31 @@
+include README.md
+include LICENSE
+include requirements.txt
+include *.md
+include *.txt
+include *.yaml
+include *.yml
+
+recursive-include chunkformer *.py
+recursive-include chunkformer *.yaml
+recursive-include chunkformer *.yml
+recursive-include chunkformer *.txt
+recursive-include chunkformer *.bin
+recursive-include chunkformer *.tsv
+recursive-include chunkformer *.wav
+recursive-include chunkformer *.pdf
+recursive-include chunkformer *.png
+recursive-include chunkformer *.jpg
+recursive-include chunkformer *.jpeg
+
+recursive-include docs *
+recursive-include data *
+
+# Exclude compiled Python files
+global-exclude *.py[cod]
+global-exclude __pycache__
+global-exclude *.so
+global-exclude .DS_Store
+global-exclude .git*
+global-exclude *.swp
+global-exclude *.swo

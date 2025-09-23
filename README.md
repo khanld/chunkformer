@@ -36,6 +36,30 @@ ChunkFormer is an ASR model designed for processing long audio inputs effectivel
 
 <a name = "installation" ></a>
 ## Installation
+
+### Option 1: Install from PyPI (Recommended)
+```bash
+pip install chunkformer
+```
+
+### Option 2: Install from source
+```bash
+# Clone the repository
+git clone https://github.com/your-username/chunkformer.git
+cd chunkformer
+
+# Install in development mode
+pip install -e .
+
+# Or install normally
+pip install .
+```
+
+### Option 3: Install with development dependencies
+```bash
+pip install -e ".[dev]"
+```
+
 #### Checkpoints
 | Language | Model |
 |----------|-------|
@@ -44,14 +68,68 @@ ChunkFormer is an ASR model designed for processing long audio inputs effectivel
 
 
 #### Dependencies
-To run the implementation, ensure you have an environment with PyTorch working and the following dependencies installed:
-
-```bash
-pip install -r requirements.txt
-```
+The package will automatically install all required dependencies including PyTorch, transformers, and other necessary libraries.
 
 <a name = "usage" ></a>
 ## Usage
+
+### Python API Usage
+```python
+import chunkformer
+
+# Option 1: Load a pre-trained model from Hugging Face or local directory
+model = chunkformer.ChunkFormerModel.from_pretrained("khanhld/chunkformer-large-vie")
+
+# Option 2: Load from local checkpoint directory 
+model = chunkformer.ChunkFormerModel.from_pretrained("path/to/model/checkpoint")
+
+# For single long-form audio transcription
+transcription = model.endless_decode(
+    audio_path="path/to/long_audio.wav",
+    chunk_size=64,
+    left_context_size=128, 
+    right_context_size=128,
+    total_batch_duration=14400,  # in seconds
+    return_timestamps=True
+)
+print(transcription)
+
+# For batch processing of multiple audio files
+audio_files = ["audio1.wav", "audio2.wav", "audio3.wav"]
+transcriptions = model.batch_decode(
+    audio_paths=audio_files,
+    chunk_size=64,
+    left_context_size=128,
+    right_context_size=128,
+    total_batch_duration=1800  # Total batch duration in seconds
+)
+
+for i, transcription in enumerate(transcriptions):
+    print(f"Audio {i+1}: {transcription}")
+
+# For custom configuration
+config = chunkformer.ChunkFormerConfig(
+    chunk_size=32,
+    left_context_size=64,
+    right_context_size=64,
+    vocab_size=4992
+)
+model = chunkformer.ChunkFormerModel(config)
+```
+
+### Command Line Usage
+After installation, you can use the command line interface:
+
+```bash
+chunkformer-decode \
+    --model_checkpoint path/to/local/hf/checkpoint/repo \
+    --long_form_audio path/to/audio.wav \
+    --total_batch_duration 14400 \
+    --chunk_size 64 \
+    --left_context_size 128 \
+    --right_context_size 128
+```
+
 #### Training the Model
 For training/finetuning, follow this [PR](https://github.com/wenet-e2e/wenet/pull/2723).
 
@@ -62,6 +140,17 @@ python decode.py \
     --model_checkpoint path/to/local/hf/checkpoint/repo \
     --long_form_audio path/to/audio.wav \
     --total_batch_duration 14400 \ #in second, default is 1800
+    --chunk_size 64 \
+    --left_context_size 128 \
+    --right_context_size 128
+```
+
+Or using the command line tool:
+```bash
+chunkformer-decode \
+    --model_checkpoint path/to/local/hf/checkpoint/repo \
+    --long_form_audio path/to/audio.wav \
+    --total_batch_duration 14400 \
     --chunk_size 64 \
     --left_context_size 128 \
     --right_context_size 128
@@ -80,6 +169,17 @@ python decode.py \
     --model_checkpoint path/to/local/hf/checkpoint/repo \
     --audio_list path/to/audio_list.tsv \
     --total_batch_duration 14400 \ #in second, default is 1800
+    --chunk_size 64 \
+    --left_context_size 128 \
+    --right_context_size 128
+```
+
+Or using the command line tool:
+```bash
+chunkformer-decode \
+    --model_checkpoint path/to/local/hf/checkpoint/repo \
+    --audio_list path/to/audio_list.tsv \
+    --total_batch_duration 14400 \
     --chunk_size 64 \
     --left_context_size 128 \
     --right_context_size 128

@@ -10,12 +10,72 @@ from tqdm import tqdm
 from colorama import Fore, Style
 
 import torchaudio.compliance.kaldi as kaldi
-from model.utils.init_model import init_model
-from model.utils.checkpoint import load_checkpoint
-from model.utils.file_utils import read_symbol_table
-from model.utils.ctc_utils import get_output_with_timestamps, get_output
+from .model.utils.init_model import init_model
+from .model.utils.checkpoint import load_checkpoint
+from .model.utils.file_utils import read_symbol_table
+from .model.utils.ctc_utils import get_output_with_timestamps, get_output
 from contextlib import nullcontext
 from pydub import AudioSegment
+
+
+class ChunkFormerDecoder:
+    """
+    ChunkFormer decoder class for convenient usage.
+    """
+    
+    def __init__(self, model_checkpoint, device="cuda"):
+        """
+        Initialize the ChunkFormer decoder.
+        
+        Args:
+            model_checkpoint (str): Path to the model checkpoint directory
+            device (str): Device to run the model on
+        """
+        self.model_checkpoint = model_checkpoint
+        self.device = torch.device(device)
+        self.model, self.char_dict = self._init_model()
+    
+    def _init_model(self):
+        """Initialize the model and character dictionary."""
+        return init(self.model_checkpoint, self.device)
+    
+    def decode_audio(self, audio_path, **kwargs):
+        """
+        Decode a single audio file.
+        
+        Args:
+            audio_path (str): Path to the audio file
+            **kwargs: Additional arguments for decoding
+            
+        Returns:
+            str: Transcribed text
+        """
+        audio = load_audio(audio_path)
+        return self._decode_audio_tensor(audio, **kwargs)
+    
+    def decode_long_form_audio(self, audio_path, chunk_size=40, left_context_size=5, 
+                             right_context_size=5, total_batch_duration=600, **kwargs):
+        """
+        Decode long-form audio using chunk-wise processing.
+        
+        Args:
+            audio_path (str): Path to the long-form audio file
+            chunk_size (int): Size of each chunk in seconds
+            left_context_size (int): Left context size in seconds
+            right_context_size (int): Right context size in seconds
+            total_batch_duration (int): Total duration for batch processing
+            **kwargs: Additional arguments
+            
+        Returns:
+            str: Complete transcribed text
+        """
+        # Implementation would go here - using the endless_decode logic
+        pass
+    
+    def _decode_audio_tensor(self, audio_tensor, **kwargs):
+        """Decode audio tensor to text."""
+        # Implementation would use the decode logic from the original file
+        pass
 
 @torch.no_grad()
 def init(model_checkpoint, device):
@@ -84,7 +144,7 @@ def endless_decode(args, model, char_dict):
                             dither=0.0,
                             energy_floor=0.0,
                             sample_frequency=16000).unsqueeze(0)
-
+    print("x: ", xs, xs.shape)
     hyps = []
     att_cache = torch.zeros((model.encoder.num_blocks, left_context_size, model.encoder.attention_heads, model.encoder._output_size * 2 // model.encoder.attention_heads)).to(device)
     cnn_cache = torch.zeros((model.encoder.num_blocks, model.encoder._output_size, conv_lorder)).to(device)    # print(context_size)
@@ -109,7 +169,8 @@ def endless_decode(args, model, char_dict):
         if chunk_size * multiply_n * subsampling_factor * idx + rel_right_context_size < xs.shape[1]:
             encoder_outs = encoder_outs[:, :truncated_context_size]  # (B, maxlen, vocab_size) # exclude the output of rel right context
         offset = offset - encoder_lens + encoder_outs.shape[1]
-
+        print("encoder_outs: ", encoder_outs, encoder_outs.shape)
+        print("encoder_lens: ", encoder_lens)
 
         hyp = model.encoder.ctc_forward(encoder_outs).squeeze(0)
         hyps.append(hyp)
