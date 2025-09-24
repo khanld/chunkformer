@@ -1,6 +1,7 @@
 """
 Hugging Face compatible ChunkFormer implementation
 """
+
 import argparse
 import os
 from contextlib import nullcontext

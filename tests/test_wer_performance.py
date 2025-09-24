@@ -1,6 +1,7 @@
 """
 Test WER performance on ChunkFormer model using audio_list.tsv data.
 """
+
 import os
 from pathlib import Path
 

@@ -178,12 +178,12 @@ class ChunkFormerEncoder(torch.nn.Module):
                     size=output_size,
                     self_attn=encoder_selfattn_layer(*encoder_selfattn_layer_args),
                     feed_forward=positionwise_layer(*positionwise_layer_args),
-                    feed_forward_macaron=positionwise_layer(*positionwise_layer_args)
-                    if macaron_style
-                    else None,
-                    conv_module=convolution_layer(*convolution_layer_args)
-                    if use_cnn_module
-                    else None,
+                    feed_forward_macaron=(
+                        positionwise_layer(*positionwise_layer_args) if macaron_style else None
+                    ),
+                    conv_module=(
+                        convolution_layer(*convolution_layer_args) if use_cnn_module else None
+                    ),
                     dropout_rate=dropout_rate,
                     normalize_before=normalize_before,
                 )
