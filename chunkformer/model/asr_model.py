@@ -1,21 +1,14 @@
-from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
-
 import torch
-import logging
 
-from torch.nn.utils.rnn import pad_sequence
 from .ctc import CTC
-from .utils.common import (IGNORE_ID, add_sos_eos, log_add,
-                                remove_duplicates_and_blank, th_accuracy,
-                                reverse_pad_list)
+from .utils.common import IGNORE_ID
+
 # from model.mwer import MWER
-from .utils.mask import (make_pad_mask, mask_finished_preds,
-                              mask_finished_scores, subsequent_mask)
 
 
 class ASRModel(torch.nn.Module):
     """CTC-attention hybrid Encoder-Decoder model"""
+
     def __init__(
         self,
         vocab_size: int,
@@ -38,4 +31,4 @@ class ASRModel(torch.nn.Module):
 
         self.encoder = encoder
         self.encoder.ctc = ctc
-        self.ctc = ctc        
+        self.ctc = ctc

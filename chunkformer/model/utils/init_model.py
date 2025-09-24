@@ -12,38 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-from ..asr_model import ASRModel
+import os
 
+import torch
+
+from ..asr_model import ASRModel
 from ..cmvn import GlobalCMVN
 from ..ctc import CTC
 from ..encoder import ChunkFormerEncoder
 from .cmvn import load_cmvn
-import os
 
 
 def init_model(configs, config_path):
-    if configs['cmvn_file'] is not None:
-        cmvn_file = os.path.abspath(os.path.join(config_path, '..', '..', configs['cmvn_file']))
-        mean, istd = load_cmvn(cmvn_file, configs['is_json_cmvn'])
-        global_cmvn = GlobalCMVN(
-            torch.from_numpy(mean).float(),
-            torch.from_numpy(istd).float())
+    if configs["cmvn_file"] is not None:
+        cmvn_file = os.path.abspath(os.path.join(config_path, "..", "..", configs["cmvn_file"]))
+        mean, istd = load_cmvn(cmvn_file, configs["is_json_cmvn"])
+        global_cmvn = GlobalCMVN(torch.from_numpy(mean).float(), torch.from_numpy(istd).float())
     else:
         global_cmvn = None
 
-    input_dim = configs['input_dim']
-    vocab_size = configs['output_dim']
+    input_dim = configs["input_dim"]
+    vocab_size = configs["output_dim"]
 
-    encoder = ChunkFormerEncoder(input_dim,
-                                global_cmvn=global_cmvn,
-                                **configs['encoder_conf'])
+    encoder = ChunkFormerEncoder(input_dim, global_cmvn=global_cmvn, **configs["encoder_conf"])
 
     ctc = CTC(vocab_size, encoder._output_size)
 
-    model = ASRModel(vocab_size=vocab_size,
-                        encoder=encoder,
-                        ctc=ctc)
-
+    model = ASRModel(vocab_size=vocab_size, encoder=encoder, ctc=ctc)
 
     return model

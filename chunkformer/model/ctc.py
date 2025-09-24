@@ -13,12 +13,14 @@
 # limitations under the License.
 # Modified from ESPnet(https://github.com/espnet/espnet)
 
+
 import torch
 import torch.nn.functional as F
-import random
+
 
 class CTC(torch.nn.Module):
     """CTC module"""
+
     def __init__(
         self,
         odim: int,
@@ -27,7 +29,7 @@ class CTC(torch.nn.Module):
         reduce: bool = True,
         blank: int = 0,
     ):
-        """ Construct CTC module
+        """Construct CTC module
         Args:
             odim: dimension of outputs
             encoder_output_size: number of encoder projection units
@@ -42,7 +44,6 @@ class CTC(torch.nn.Module):
         reduction_type = "sum" if reduce else "none"
         self.ctc_loss = torch.nn.CTCLoss(reduction=reduction_type)
         self.blank = blank
-
 
     def log_softmax(self, hs_pad: torch.Tensor) -> torch.Tensor:
         """log_softmax of frame activations
@@ -63,4 +64,3 @@ class CTC(torch.nn.Module):
             torch.Tensor: argmax applied 2d tensor (B, Tmax)
         """
         return torch.argmax(self.ctc_lo(hs_pad), dim=2)
-    

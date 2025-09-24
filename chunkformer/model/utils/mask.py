@@ -15,8 +15,6 @@
 
 
 import torch
-import numpy as np
-import random
 
 '''
 def subsequent_mask(
@@ -52,9 +50,10 @@ def subsequent_mask(
     return torch.tril(ret)
 '''
 
+
 def subsequent_mask(
-        size: int,
-        device: torch.device = torch.device("cpu"),
+    size: int,
+    device: torch.device = torch.device("cpu"),
 ) -> torch.Tensor:
     """Create mask for subsequent steps (size, size).
 
@@ -89,10 +88,10 @@ def subsequent_mask(
 
 
 def subsequent_chunk_mask(
-        size: int,
-        chunk_size: int,
-        num_left_chunks: int = -1,
-        device: torch.device = torch.device("cpu"),
+    size: int,
+    chunk_size: int,
+    num_left_chunks: int = -1,
+    device: torch.device = torch.device("cpu"),
 ) -> torch.Tensor:
     """Create mask for subsequent steps (size, size) with chunk size,
        this is for streaming encoder
@@ -161,11 +160,8 @@ def make_pad_mask(lengths: torch.Tensor, max_len: int = 0) -> torch.Tensor:
                  [0, 0, 1, 1, 1]]
     """
     batch_size = lengths.size(0)
-    max_len = max_len if max_len > 0 else lengths.max().item()
-    seq_range = torch.arange(0,
-                             max_len,
-                             dtype=torch.int64,
-                             device=lengths.device)
+    max_len = max_len if max_len > 0 else int(lengths.max().item())
+    seq_range = torch.arange(0, max_len, dtype=torch.int64, device=lengths.device)
     seq_range_expand = seq_range.unsqueeze(0).expand(batch_size, max_len)
     seq_length_expand = lengths.unsqueeze(-1)
     mask = seq_range_expand >= seq_length_expand
@@ -200,8 +196,7 @@ def make_non_pad_mask(lengths: torch.Tensor) -> torch.Tensor:
     return ~make_pad_mask(lengths)
 
 
-def mask_finished_scores(score: torch.Tensor,
-                         flag: torch.Tensor) -> torch.Tensor:
+def mask_finished_scores(score: torch.Tensor, flag: torch.Tensor) -> torch.Tensor:
     """
     If a sequence is finished, we only allow one alive branch. This function
     aims to give one branch a zero score and the rest -inf score.
@@ -218,20 +213,17 @@ def mask_finished_scores(score: torch.Tensor,
     beam_size = score.size(-1)
     zero_mask = torch.zeros_like(flag, dtype=torch.bool)
     if beam_size > 1:
-        unfinished = torch.cat((zero_mask, flag.repeat([1, beam_size - 1])),
-                               dim=1)
-        finished = torch.cat((flag, zero_mask.repeat([1, beam_size - 1])),
-                             dim=1)
+        unfinished = torch.cat((zero_mask, flag.repeat([1, beam_size - 1])), dim=1)
+        finished = torch.cat((flag, zero_mask.repeat([1, beam_size - 1])), dim=1)
     else:
         unfinished = zero_mask
         finished = flag
-    score.masked_fill_(unfinished, -float('inf'))
+    score.masked_fill_(unfinished, -float("inf"))
     score.masked_fill_(finished, 0)
     return score
 
 
-def mask_finished_preds(pred: torch.Tensor, flag: torch.Tensor,
-                        eos: int) -> torch.Tensor:
+def mask_finished_preds(pred: torch.Tensor, flag: torch.Tensor, eos: int) -> torch.Tensor:
     """
     If a sequence is finished, all of its branch should be <eos>
 

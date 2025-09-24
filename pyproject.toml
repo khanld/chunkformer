@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chunkformer"
-version = "0.1.0"
+version = "0.1.1"
 authors = [
     {name = "khanld", email = "khanhld218@gmail.com"},
 ]
 description = "ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -18,10 +18,8 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Multimedia :: Sound/Audio :: Speech",
 ]
@@ -42,7 +40,7 @@ keywords = [
     "asr",
     "chunkformer",
     "transformer",
-    "conformer", 
+    "conformer",
     "pytorch",
     "long-form-audio",
     "machine-learning",
@@ -54,7 +52,13 @@ dev = [
     "pytest>=6.0.0",
     "black>=21.0.0",
     "flake8>=3.9.0",
+    "flake8-pyproject>=1.2.0",
     "isort>=5.9.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+    "types-PyYAML>=6.0.0",
+    "autopep8>=2.0.0",
+    "autoflake>=2.0.0",
 ]
 
 [project.scripts]
@@ -74,7 +78,7 @@ exclude = ["tests*"]
 
 [tool.black]
 line-length = 100
-target-version = ['py38']
+target-version = ['py310']
 
 [tool.isort]
 profile = "black"
@@ -85,3 +89,63 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "performance: marks tests as performance tests",
+]
+filterwarnings = [
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+]
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203", "W503", "B008", "C416", "EXE001"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".eggs",
+    "*.egg-info",
+    ".venv",
+    ".env"
+]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+exclude = [
+    "tests/",
+    "setup.py"
+]
+
+[tool.autopep8]
+max-line-length = 100
+aggressive = 2
+exclude = ".git,__pycache__,build,dist,.eggs,*.egg-info,.venv,.env"
+
+[tool.autoflake]
+remove-all-unused-imports = true
+remove-unused-variables = true
+remove-duplicate-keys = true
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".eggs",
+    "*.egg-info",
+    ".venv",
+    ".env"
+]

@@ -5,6 +5,7 @@ from typing import Tuple, Union
 
 import torch
 
+
 class RelPositionalEncodingWithRightContext(torch.nn.Module):
     """Relative positional encoding module.
 
@@ -20,7 +21,7 @@ class RelPositionalEncodingWithRightContext(torch.nn.Module):
 
         self.d_model = d_model
         self.dropout = torch.nn.Dropout(p=dropout_rate)
-        self.pe = None
+        self.pe: torch.Tensor  # Will be initialized in extend_pe
         self.xscale = math.sqrt(self.d_model)
         self.max_len = max_len
         self.extend_pe(max_len)
@@ -56,9 +57,7 @@ class RelPositionalEncodingWithRightContext(torch.nn.Module):
         left_context_size: Union[int, torch.Tensor] = 0,
         right_context_size: Union[int, torch.Tensor] = 0,
         apply_dropout: bool = False,
-
     ) -> torch.Tensor:
-
         if isinstance(left_context_size, int):
             assert left_context_size + chunk_size < self.max_len
             x_size_1 = chunk_size + left_context_size
@@ -67,7 +66,8 @@ class RelPositionalEncodingWithRightContext(torch.nn.Module):
                 self.pe.size(1) // 2
                 - x_size_1
                 + 1 : self.pe.size(1) // 2  # noqa E203
-                + chunk_size + right_context_size,
+                + chunk_size
+                + right_context_size,
             ]
         else:
             assert left_context_size + chunk_size < self.max_len
@@ -77,7 +77,8 @@ class RelPositionalEncodingWithRightContext(torch.nn.Module):
                 self.pe.size(1) // 2
                 - x_size_1
                 + 1 : self.pe.size(1) // 2  # noqa E203
-                + chunk_size + right_context_size,
+                + chunk_size
+                + right_context_size,
             ]
 
         return pos_emb
@@ -110,6 +111,6 @@ class RelPositionalEncodingWithRightContext(torch.nn.Module):
             chunk_size=chunk_size,
             left_context_size=left_context_size,
             right_context_size=right_context_size,
-            apply_dropout=False
+            apply_dropout=False,
         ).to(device=x.device, dtype=x.dtype)
         return self.dropout(x), self.dropout(pos_emb)

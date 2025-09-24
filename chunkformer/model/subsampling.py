@@ -1,9 +1,12 @@
 """Subsampling layer definition."""
 
 
-import torch
 import math
+
+import torch
+
 from .utils.mask import make_pad_mask
+
 
 class DepthwiseConvSubsampling(torch.nn.Module):
     """
@@ -47,8 +50,10 @@ class DepthwiseConvSubsampling(torch.nn.Module):
             and subsampling_conv_chunking_factor != 1
             and subsampling_conv_chunking_factor % 2 != 0
         ):
-            raise ValueError("""subsampling_conv_chunking_factor
-                                "should be -1, 1, or a power of 2""")
+            raise ValueError(
+                """subsampling_conv_chunking_factor
+                                "should be -1, 1, or a power of 2"""
+            )
         self.subsampling_conv_chunking_factor = subsampling_conv_chunking_factor
 
         in_channels = 1
@@ -57,7 +62,6 @@ class DepthwiseConvSubsampling(torch.nn.Module):
         self._stride = 2
         self._kernel_size = 3
         self._ceil_mode = False
-
 
         self._left_padding = 0
         self._right_padding = 0
@@ -102,12 +106,9 @@ class DepthwiseConvSubsampling(torch.nn.Module):
             in_channels = conv_channels
 
         in_length = torch.tensor(feat_in, dtype=torch.float)
-        out_length = self.calc_length(
-            lengths=in_length
-        )
+        out_length = self.calc_length(lengths=in_length)
         self.out = torch.nn.Linear(conv_channels * int(out_length), feat_out)
         self.conv2d_subsampling = True
-
 
         self.conv = torch.nn.Sequential(*layers)
 
@@ -117,12 +118,9 @@ class DepthwiseConvSubsampling(torch.nn.Module):
     def get_streaming_cache_size(self):
         return [0, self.subsampling_rate + 1]
 
-    def forward(self,
-                x,
-                mask,
-                chunk_size: int = -1,
-                left_context_size: int = 0,
-                right_context_size: int = 0):
+    def forward(
+        self, x, mask, chunk_size: int = -1, left_context_size: int = 0, right_context_size: int = 0
+    ):
         lengths = mask.sum(dim=-1).squeeze(-1)
         lengths = self.calc_length(
             lengths,
@@ -141,7 +139,7 @@ class DepthwiseConvSubsampling(torch.nn.Module):
                 # if subsampling_conv_chunking_factor is 1, we split only if needed
                 # avoiding a bug / feature limiting indexing of tensors to 2**31
                 # see https://github.com/pytorch/pytorch/issues/80020
-                x_ceil = 2 ** 31 / self._conv_channels * self._stride * self._stride
+                x_ceil = 2**31 / self._conv_channels * self._stride * self._stride
                 if torch.numel(x) > x_ceil:
                     need_to_split = True
                 else:
@@ -172,7 +170,8 @@ class DepthwiseConvSubsampling(torch.nn.Module):
             x,
             chunk_size=chunk_size,
             left_context_size=left_context_size,
-            right_context_size=right_context_size)
+            right_context_size=right_context_size,
+        )
         mask = ~make_pad_mask(lengths, x.size(1)).unsqueeze(1)
         return x, pos_emb, mask
 
@@ -181,8 +180,8 @@ class DepthwiseConvSubsampling(torch.nn.Module):
         with torch.no_grad():
             # init conv
             scale = 1.0 / self._kernel_size
-            dw_max = (self._kernel_size ** 2) ** -0.5
-            pw_max = self._conv_channels ** -0.5
+            dw_max = (self._kernel_size**2) ** -0.5
+            pw_max = self._conv_channels**-0.5
 
             torch.nn.init.uniform_(self.conv[0].weight, -scale, scale)
             torch.nn.init.uniform_(self.conv[0].bias, -scale, scale)
@@ -198,7 +197,7 @@ class DepthwiseConvSubsampling(torch.nn.Module):
             torch.nn.init.uniform_(self.out.bias, -fc_scale, fc_scale)
 
     def conv_split_by_batch(self, x):
-        """ Tries to split input by batch, run conv and concat results """
+        """Tries to split input by batch, run conv and concat results"""
         b, _, _, _ = x.size()
         if b == 1:  # can't split if batch size is 1
             return x, False
@@ -208,19 +207,18 @@ class DepthwiseConvSubsampling(torch.nn.Module):
         else:
             # avoiding a bug / feature limiting indexing of tensors to 2**31
             # see https://github.com/pytorch/pytorch/issues/80020
-            x_ceil = 2 ** 31 / self._conv_channels * self._stride * self._stride
+            x_ceil = 2**31 / self._conv_channels * self._stride * self._stride
             p = math.ceil(math.log(torch.numel(x) / x_ceil, 2))
-            cf = 2 ** p
+            cf = 2**p
 
         new_batch_size = b // cf
         if new_batch_size == 0:  # input is too big
             return x, False
 
-        return torch.cat([self.conv(chunk)
-                          for chunk in torch.split(x, new_batch_size, 0)]), True
+        return torch.cat([self.conv(chunk) for chunk in torch.split(x, new_batch_size, 0)]), True
 
     def conv_split_by_channel(self, x):
-        """ For dw convs, tries to split input by time, run conv and concat results """
+        """For dw convs, tries to split input by time, run conv and concat results"""
         x = self.conv[0](x)  # full conv2D
         x = self.conv[1](x)  # activation
 
@@ -232,8 +230,8 @@ class DepthwiseConvSubsampling(torch.nn.Module):
             else:
                 # avoiding a bug / feature limiting indexing of tensors to 2**31
                 # see https://github.com/pytorch/pytorch/issues/80020
-                p = math.ceil(math.log(torch.numel(x) / 2 ** 31, 2))
-                cf = 2 ** p
+                p = math.ceil(math.log(torch.numel(x) / 2**31, 2))
+                cf = 2**p
 
             new_c = int(c // cf)
             if new_c == 0:
@@ -246,13 +244,12 @@ class DepthwiseConvSubsampling(torch.nn.Module):
             x = self.channel_chunked_conv(self.conv[i * 3 + 2], new_c, x)
 
             # splitting pointwise convs by time
-            x = torch.cat([self.conv[i * 3 + 3](chunk)
-                           for chunk in torch.split(x, new_t, 2)], 2)
+            x = torch.cat([self.conv[i * 3 + 3](chunk) for chunk in torch.split(x, new_t, 2)], 2)
             x = self.conv[i * 3 + 4](x)  # activation
         return x
 
     def channel_chunked_conv(self, conv, chunk_size, x):
-        """ Performs channel chunked convolution"""
+        """Performs channel chunked convolution"""
 
         ind = 0
         out_chunks = []
@@ -271,7 +268,7 @@ class DepthwiseConvSubsampling(torch.nn.Module):
 
         return torch.cat(out_chunks, 1)
 
-    def calc_length(self, lengths):
+    def calc_length(self, lengths: torch.Tensor):
         """
         Calculates the output length of a Tensor
         passed through a convolution or max pooling layer
@@ -283,7 +280,7 @@ class DepthwiseConvSubsampling(torch.nn.Module):
         repeat_num = self._sampling_num
         add_pad = all_paddings - kernel_size
         one = 1.0
-        for i in range(repeat_num):
+        for _ in range(repeat_num):
             lengths = torch.div(lengths.to(dtype=torch.float) + add_pad, stride) + one
             if ceil_mode:
                 lengths = torch.ceil(lengths)

@@ -123,25 +123,6 @@ weights/
 *.tflite
 *.pb
 
-# Data files
-*.wav
-*.mp3
-*.mp4
-*.avi
-*.mov
-*.flac
-*.ogg
-*.aac
-*.m4a
-data/
-datasets/
-*.tsv
-*.csv
-*.json
-*.txt
-*.jsonl
-*.parquet
-*.feather
 
 # Temporary files
 *.tmp
@@ -175,3 +156,35 @@ Desktop.ini
 .cache/
 transformers_cache/
 
+# Sensitive files and credentials
+key
+**/key
+*.key
+.env
+.env.*
+config.json
+**/config.json
+credentials.json
+**/credentials.json
+
+# API keys and tokens (patterns)
+**/sk-*
+**/pk_*
+**/rk_*
+**/xoxb-*
+**/xoxp-*
+**/gho_*
+**/ghp_*
+**/github_pat_*
+**/AIza*
+**/ya29.*
+**/hf_*
+**/pypi-*
+
+# Output and log files
+*.out
+*.log
+logs/
+log/
+logs*.out
+log*.out

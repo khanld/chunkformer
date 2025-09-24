@@ -15,21 +15,25 @@
 
 """ConvolutionModule definition."""
 
-from typing import Tuple
+from typing import Tuple, Union
 
 import torch
 from torch import nn
 
+
 class ChunkConvolutionModule(nn.Module):
     """ConvolutionModule in ChunkFormer model."""
-    def __init__(self,
-                 channels: int,
-                 kernel_size: int = 15,
-                 activation: nn.Module = nn.ReLU(),
-                 norm: str = "batch_norm",
-                 causal: bool = False,
-                 bias: bool = True,
-                 dynamic_conv: bool = False):
+
+    def __init__(
+        self,
+        channels: int,
+        kernel_size: int = 15,
+        activation: nn.Module = nn.ReLU(),
+        norm: str = "batch_norm",
+        causal: bool = False,
+        bias: bool = True,
+        dynamic_conv: bool = False,
+    ):
         """Construct an ConvolutionModule object.
         Args:
             channels (int): The number of channels of conv layers.
@@ -39,6 +43,7 @@ class ChunkConvolutionModule(nn.Module):
         super().__init__()
         self.dynamic_conv = dynamic_conv
         self.channels = channels
+        self.norm: Union[nn.BatchNorm1d, nn.LayerNorm]  # Will be set based on norm parameter
         self.kernel_size = kernel_size
         self.pointwise_conv1 = nn.Conv1d(
             channels,
@@ -75,7 +80,7 @@ class ChunkConvolutionModule(nn.Module):
             bias=bias,
         )
 
-        assert norm in ['batch_norm', 'layer_norm']
+        assert norm in ["batch_norm", "layer_norm"]
         if norm == "batch_norm":
             self.use_layer_norm = False
             self.norm = nn.BatchNorm1d(channels)
@@ -92,14 +97,13 @@ class ChunkConvolutionModule(nn.Module):
             bias=bias,
         )
         self.activation = activation
-        
+
     def forward_parallel_chunk(
         self,
         x: torch.Tensor,
         mask_pad: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool),
         cache: torch.Tensor = torch.zeros((0, 0)),
-        truncated_context_size: int = 0
-
+        truncated_context_size: int = 0,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute convolution module.
         Args:
@@ -129,12 +133,12 @@ class ChunkConvolutionModule(nn.Module):
 
         # Streaming long-form transcription is disabled if input cache is empty
         if cache_t > 0:
-            new_cache = x[:, :truncated_context_size + cache.size(-1)]
-            new_cache = new_cache[:, -cache.size(-1):]
+            new_cache = x[:, : truncated_context_size + cache.size(-1)]
+            new_cache = new_cache[:, -cache.size(-1) :]
         else:
             new_cache = torch.zeros((0, 0))
 
-        x = nn.functional.pad(x, (0, lorder), 'constant', 0.0)
+        x = nn.functional.pad(x, (0, lorder), "constant", 0.0)
         x = x.unfold(-1, chunk_size + 2 * lorder, chunk_size).transpose(0, 1)
         # [n_chunk +1, C, chunk_size + 2 * lorder]
         # -----------------------------------------------------------------------------

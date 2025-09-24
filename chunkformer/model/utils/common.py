@@ -48,14 +48,13 @@ def pad_list(xs: List[torch.Tensor], pad_value: int):
     pad = torch.zeros(n_batch, max_len, dtype=xs[0].dtype, device=xs[0].device)
     pad = pad.fill_(pad_value)
     for i in range(n_batch):
-        pad[i, :xs[i].size(0)] = xs[i]
+        pad[i, : xs[i].size(0)] = xs[i]
 
     return pad
 
 
-def add_blank(ys_pad: torch.Tensor, blank: int,
-              ignore_id: int) -> torch.Tensor:
-    """ Prepad blank for transducer predictor
+def add_blank(ys_pad: torch.Tensor, blank: int, ignore_id: int) -> torch.Tensor:
+    """Prepad blank for transducer predictor
 
     Args:
         ys_pad (torch.Tensor): batch of padded target sequences (B, Lmax)
@@ -78,17 +77,15 @@ def add_blank(ys_pad: torch.Tensor, blank: int,
                 [0,  7,  8,  9,  0,  0]])
     """
     bs = ys_pad.size(0)
-    _blank = torch.tensor([blank],
-                          dtype=torch.long,
-                          requires_grad=False,
-                          device=ys_pad.device)
+    _blank = torch.tensor([blank], dtype=torch.long, requires_grad=False, device=ys_pad.device)
     _blank = _blank.repeat(bs).unsqueeze(1)  # [bs,1]
     out = torch.cat([_blank, ys_pad], dim=1)  # [bs, Lmax+1]
     return torch.where(out == ignore_id, blank, out)
 
 
-def add_sos_eos(ys_pad: torch.Tensor, sos: int, eos: int,
-                ignore_id: int) -> Tuple[torch.Tensor, torch.Tensor]:
+def add_sos_eos(
+    ys_pad: torch.Tensor, sos: int, eos: int, ignore_id: int
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """Add <sos> and <eos> labels.
 
     Args:
@@ -119,23 +116,17 @@ def add_sos_eos(ys_pad: torch.Tensor, sos: int, eos: int,
                 [ 4,  5,  6, 11, -1, -1],
                 [ 7,  8,  9, 11, -1, -1]])
     """
-    _sos = torch.tensor([sos],
-                        dtype=torch.long,
-                        requires_grad=False,
-                        device=ys_pad.device)
-    _eos = torch.tensor([eos],
-                        dtype=torch.long,
-                        requires_grad=False,
-                        device=ys_pad.device)
+    _sos = torch.tensor([sos], dtype=torch.long, requires_grad=False, device=ys_pad.device)
+    _eos = torch.tensor([eos], dtype=torch.long, requires_grad=False, device=ys_pad.device)
     ys = [y[y != ignore_id] for y in ys_pad]  # parse padded ys
     ys_in = [torch.cat([_sos, y], dim=0) for y in ys]
     ys_out = [torch.cat([y, _eos], dim=0) for y in ys]
     return pad_list(ys_in, eos), pad_list(ys_out, ignore_id)
 
 
-def reverse_pad_list(ys_pad: torch.Tensor,
-                     ys_lens: torch.Tensor,
-                     pad_value: float = -1.0) -> torch.Tensor:
+def reverse_pad_list(
+    ys_pad: torch.Tensor, ys_lens: torch.Tensor, pad_value: float = -1.0
+) -> torch.Tensor:
     """Reverse padding for the list of tensors.
 
     Args:
@@ -155,14 +146,13 @@ def reverse_pad_list(ys_pad: torch.Tensor,
                 [9, 8, 0, 0]])
 
     """
-    r_ys_pad = pad_sequence([(torch.flip(y.int()[:i], [0]))
-                             for y, i in zip(ys_pad, ys_lens)], True,
-                            pad_value)
+    r_ys_pad = pad_sequence(
+        [(torch.flip(y.int()[:i], [0])) for y, i in zip(ys_pad, ys_lens)], True, pad_value
+    )
     return r_ys_pad
 
 
-def th_accuracy(pad_outputs: torch.Tensor, pad_targets: torch.Tensor,
-                ignore_label: int) -> float:
+def th_accuracy(pad_outputs: torch.Tensor, pad_targets: torch.Tensor, ignore_label: int) -> float:
     """Calculate accuracy.
 
     Args:
@@ -174,23 +164,13 @@ def th_accuracy(pad_outputs: torch.Tensor, pad_targets: torch.Tensor,
         float: Accuracy value (0.0 - 1.0).
 
     """
-    pad_pred = pad_outputs.view(pad_targets.size(0), pad_targets.size(1),
-                                pad_outputs.size(1)).argmax(2)
+    pad_pred = pad_outputs.view(
+        pad_targets.size(0), pad_targets.size(1), pad_outputs.size(1)
+    ).argmax(2)
     mask = pad_targets != ignore_label
-    numerator = torch.sum(
-        pad_pred.masked_select(mask) == pad_targets.masked_select(mask))
+    numerator = torch.sum(pad_pred.masked_select(mask) == pad_targets.masked_select(mask))
     denominator = torch.sum(mask)
     return float(numerator) / float(denominator)
-
-
-def get_rnn(rnn_type: str) -> torch.nn.Module:
-    assert rnn_type in ["rnn", "lstm", "gru"]
-    if rnn_type == "rnn":
-        return torch.nn.RNN
-    elif rnn_type == "lstm":
-        return torch.nn.LSTM
-    else:
-        return torch.nn.GRU
 
 
 def get_activation(act):
@@ -204,7 +184,7 @@ def get_activation(act):
         "relu": torch.nn.ReLU,
         "selu": torch.nn.SELU,
         "swish": getattr(torch.nn, "SiLU", Swish),
-        "gelu": torch.nn.GELU
+        "gelu": torch.nn.GELU,
     }
 
     return activation_funcs[act]()
@@ -250,8 +230,8 @@ def log_add(args: List[int]) -> float:
     """
     Stable log add
     """
-    if all(a == -float('inf') for a in args):
-        return -float('inf')
+    if all(a == -float("inf") for a in args):
+        return -float("inf")
     a_max = max(args)
     lsp = math.log(sum(math.exp(a - a_max) for a in args))
     return a_max + lsp
@@ -260,6 +240,8 @@ def log_add(args: List[int]) -> float:
 def padding(waveform, sample_rate):
     chunk_step_in_sample = int(0.08 * sample_rate)
     chunk_size_in_sample = int(0.165 * sample_rate)
-    n_frames_pad = (chunk_step_in_sample - ((waveform.size(1) - chunk_size_in_sample) % chunk_step_in_sample)) % chunk_step_in_sample
+    n_frames_pad = (
+        chunk_step_in_sample - ((waveform.size(1) - chunk_size_in_sample) % chunk_step_in_sample)
+    ) % chunk_step_in_sample
     waveform = torch.nn.functional.pad(waveform, (0, n_frames_pad))
     return waveform

@@ -16,6 +16,7 @@ class MultiHeadedAttention(nn.Module):
         dropout_rate (float): Dropout rate.
 
     """
+
     def __init__(self, n_head: int, n_feat: int, dropout_rate: float):
         """Construct an MultiHeadedAttention object."""
         super().__init__()
@@ -60,8 +61,10 @@ class MultiHeadedAttention(nn.Module):
         return q, k, v
 
     def forward_attention(
-        self, value: torch.Tensor, scores: torch.Tensor,
-        mask: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool)
+        self,
+        value: torch.Tensor,
+        scores: torch.Tensor,
+        mask: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool),
     ) -> torch.Tensor:
         """Compute attention context vector.
 
@@ -83,13 +86,14 @@ class MultiHeadedAttention(nn.Module):
         #   1. onnx(16/4) [WHY? Because we feed real cache & real mask for the
         #           1st chunk to ease the onnx export.]
         #   2. pytorch training
-        if mask.size(2) > 0 :  # time2 > 0
+        if mask.size(2) > 0:  # time2 > 0
             mask = mask.unsqueeze(1).eq(0)  # (batch, 1, *, time2)
             # For last chunk, time2 might be larger than scores.size(-1)
-            mask = mask[:, :, :, :scores.size(-1)]  # (batch, 1, *, time2)
-            scores = scores.masked_fill(mask, -float('inf'))
+            mask = mask[:, :, :, : scores.size(-1)]  # (batch, 1, *, time2)
+            scores = scores.masked_fill(mask, -float("inf"))
             attn = torch.softmax(scores, dim=-1).masked_fill(
-                mask, 0.0)  # (batch, head, time1, time2)
+                mask, 0.0
+            )  # (batch, head, time1, time2)
         # NOTE(xcsong): When will `if mask.size(2) > 0` be False?
         #   1. onnx(16/-1, -1/-1, 16/0)
         #   2. jit (16/-1, -1/-1, 16/0, 16/4)
@@ -98,19 +102,22 @@ class MultiHeadedAttention(nn.Module):
 
         p_attn = self.dropout(attn)
         x = torch.matmul(p_attn, value)  # (batch, head, time1, d_k)
-        x = (x.transpose(1, 2).contiguous().view(n_batch, -1,
-                                                 self.h * self.d_k)
-             )  # (batch, time1, d_model)
+        x = (
+            x.transpose(1, 2).contiguous().view(n_batch, -1, self.h * self.d_k)
+        )  # (batch, time1, d_model)
 
+        output: torch.Tensor = self.linear_out(x)  # (batch, time1, d_model)
+        return output
 
-        return self.linear_out(x)  # (batch, time1, d_model)
-
-    def forward(self, query: torch.Tensor, key: torch.Tensor,
-                value: torch.Tensor,
-                mask: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool),
-                pos_emb: torch.Tensor = torch.empty(0),
-                cache: torch.Tensor = torch.zeros((0, 0, 0, 0))
-                ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        mask: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool),
+        pos_emb: torch.Tensor = torch.empty(0),
+        cache: torch.Tensor = torch.zeros((0, 0, 0, 0)),
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute scaled dot product attention.
 
         Args:
@@ -160,8 +167,7 @@ class MultiHeadedAttention(nn.Module):
         # >>> d = torch.split(a, 2, dim=-1)
         # >>> torch.equal(d[0], d[1])  # True
         if cache.size(0) > 0:
-            key_cache, value_cache = torch.split(
-                cache, cache.size(-1) // 2, dim=-1)
+            key_cache, value_cache = torch.split(cache, cache.size(-1) // 2, dim=-1)
             k = torch.cat([key_cache, k], dim=2)
             v = torch.cat([value_cache, v], dim=2)
         # NOTE(xcsong): We do cache slicing in encoder.forward_chunk, since it's
@@ -180,6 +186,7 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
         n_feat (int): The number of features.
         dropout_rate (float): Dropout rate.
     """
+
     def __init__(self, n_head, n_feat, dropout_rate):
         """Construct an RelPositionMultiHeadedAttention object."""
         super().__init__(n_head, n_feat, dropout_rate)
@@ -218,7 +225,6 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
             storage_offset=n_stride * (time1 - 1),
         )
 
-
     def forward_parallel_chunk(
         self,
         query: torch.Tensor,
@@ -229,7 +235,7 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
         cache: torch.Tensor = torch.zeros((0, 0, 0)),
         right_context_size: int = 0,
         left_context_size: int = 0,
-        truncated_context_size: int = 0
+        truncated_context_size: int = 0,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute 'Scaled Dot Product Attention' with rel. positional encoding.
         Args:
@@ -255,35 +261,28 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
         cache_t = cache.size(0)
         if cache_t == 0:
             cache = torch.zeros(
-                (left_context_size, self.h, self.d_k * 2),
-                device=q.device, dtype=q.dtype
+                (left_context_size, self.h, self.d_k * 2), device=q.device, dtype=q.dtype
             )
         # (B, head, time1, d_k * 2),
         kv = torch.cat([k, v], dim=-1)
         # [n_chunk * chunk_size, head, F]
         kv = kv.transpose(1, 2).reshape(-1, self.h, self.d_k * 2)
 
-
         # ----------Overlapping Chunk Transformation-----------------------------------
         kv = torch.cat([cache, kv], dim=0)
 
         if cache_t > 0:
-            new_cache = kv[:truncated_context_size + cache.size(0)][-cache.size(0):]
+            new_cache = kv[: truncated_context_size + cache.size(0)][-cache.size(0) :]
         else:
             # Streaming long-form transcription is disabled if input cache is empty,
             new_cache = torch.zeros((0, 0, 0), device=q.device, dtype=q.dtype)
         kv = torch.nn.functional.pad(kv, (0, 0, 0, 0, 0, right_context_size))
-        kv = kv.unfold(
-            0,
-            left_context_size + q.shape[1] + right_context_size,
-            q.shape[1]
-        )
+        kv = kv.unfold(0, left_context_size + q.shape[1] + right_context_size, q.shape[1])
         # -----------------------------------------------------------------------------
 
         # [n_chunk + 1, head, F, left_context_size]
         kv = kv.transpose(2, 3)
-        k, v = torch.split(
-            kv, kv.size(-1) // 2, dim=-1)
+        k, v = torch.split(kv, kv.size(-1) // 2, dim=-1)
 
         # NOTE(xcsong): We do cache slicing in encoder.forward_chunk, since it's
         #   non-trivial to calculate `next_cache_start` here.
@@ -296,13 +295,11 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
         # (batch, head, time1, d_k)
         q_with_bias_v = (q + self.pos_bias_v).transpose(1, 2)
 
-
         # compute attention score
         # first compute matrix a and matrix c
         # as described in https://arxiv.org/abs/1901.02860 Section 3.3
         # (batch, head, time1, time2)
         matrix_ac = torch.matmul(q_with_bias_u, k.transpose(-2, -1))
-
 
         # compute matrix b and matrix d
         # (batch, head, time1, time2)
@@ -311,7 +308,6 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
         # Add relative shift with left and right context inclusion, it can stream
         matrix_bd = self.rel_shift(matrix_bd, left_context_size, right_context_size)
 
-        scores = (matrix_ac + matrix_bd) / math.sqrt(
-            self.d_k)  # (batch, head, time1, time2)
+        scores = (matrix_ac + matrix_bd) / math.sqrt(self.d_k)  # (batch, head, time1, time2)
 
         return self.forward_attention(v, scores, mask), new_cache

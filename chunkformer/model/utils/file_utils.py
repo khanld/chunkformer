@@ -17,10 +17,10 @@ import re
 
 def read_lists(list_files):
     lists = []
-    with open(list_files, 'r', encoding='utf8') as f:
+    with open(list_files, "r", encoding="utf8") as f:
         for list_file in f:
             list_file = list_file.rstrip()
-            with open(list_file, 'r', encoding='utf8') as g:
+            with open(list_file, "r", encoding="utf8") as g:
                 for line in g:
                     lists.append(line.strip())
 
@@ -49,20 +49,23 @@ def read_non_lang_symbols(non_lang_sym_path):
         non_lang_syms_pattern = re.compile(r"(\[[^\[\]]+\]|<[^<>]+>|{[^{}]+})")
         for sym in syms:
             if non_lang_syms_pattern.fullmatch(sym) is None:
+
                 class BadSymbolFormat(Exception):
                     pass
+
                 raise BadSymbolFormat(
                     "Non-linguistic symbols should be "
                     "formatted in {xxx}/<xxx>/[xxx], consider"
                     " modify '%s' to meet the requirment. "
                     "More details can be found in discussions here : "
-                    "https://github.com/wenet-e2e/wenet/pull/819" % (sym))
+                    "https://github.com/wenet-e2e/wenet/pull/819" % (sym)
+                )
         return syms
 
 
 def read_symbol_table(symbol_table_file):
     symbol_table = {}
-    with open(symbol_table_file, 'r', encoding='utf8') as fin:
+    with open(symbol_table_file, "r", encoding="utf8") as fin:
         for line in fin:
             arr = line.strip().split()
             assert len(arr) == 2

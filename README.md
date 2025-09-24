@@ -78,7 +78,7 @@ model = ChunkFormerModel.from_pretrained("khanhld/chunkformer-large-vie")
 transcription = model.endless_decode(
     audio_path="path/to/long_audio.wav",
     chunk_size=64,
-    left_context_size=128, 
+    left_context_size=128,
     right_context_size=128,
     total_batch_duration=14400,  # in seconds
     return_timestamps=True
@@ -107,7 +107,7 @@ After installation, you can use the command line interface:
 To test the model with a single [long-form audio file](data/common_voice_vi_23397238.wav). Audio file extensions ".mp3", ".wav", ".flac", ".m4a", ".aac" are accepted:
 ```bash
 chunkformer-decode \
-    --model_checkpoint khanhld/chunkformer-large-vie \
+    --model_checkpoint path/to/hf/checkpoint/repo \
     --long_form_audio path/to/audio.wav \
     --total_batch_duration 14400 \
     --chunk_size 64 \
@@ -157,7 +157,7 @@ Copy the following files from your training output to the model directory:
 
 1. **Model Checkpoint**
    ```bash
-   # Supported formats: .pt, .ckpt, .bin. 
+   # Supported formats: .pt, .ckpt, .bin.
    # Wenet uses .pt by default
    cp /path/to/your/final.pt pytorch_model.pt
    ```
@@ -202,8 +202,8 @@ If you use this work in your research, please cite:
 ```bibtex
 @INPROCEEDINGS{10888640,
   author={Le, Khanh and Ho, Tuan Vu and Tran, Dung and Chau, Duc Thanh},
-  booktitle={ICASSP 2025 - 2025 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)}, 
-  title={ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription}, 
+  booktitle={ICASSP 2025 - 2025 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)},
+  title={ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription},
   year={2025},
   volume={},
   number={},

@@ -25,6 +25,7 @@ class ChunkFormerEncoderLayer(nn.Module):
             True: use layer_norm before each sub-block.
             False: use layer_norm after each sub-block.
     """
+
     def __init__(
         self,
         size: int,
@@ -50,10 +51,8 @@ class ChunkFormerEncoderLayer(nn.Module):
         else:
             self.ff_scale = 1.0
         if self.conv_module is not None:
-            self.norm_conv = nn.LayerNorm(size,
-                                          eps=1e-5)  # for the CNN module
-            self.norm_final = nn.LayerNorm(
-                size, eps=1e-5)  # for the final output of the block
+            self.norm_conv = nn.LayerNorm(size, eps=1e-5)  # for the CNN module
+            self.norm_final = nn.LayerNorm(size, eps=1e-5)  # for the final output of the block
         self.dropout = nn.Dropout(dropout_rate)
         self.size = size
         self.normalize_before = normalize_before
@@ -68,7 +67,7 @@ class ChunkFormerEncoderLayer(nn.Module):
         cnn_cache: torch.Tensor = torch.zeros((0, 0, 0)),
         right_context_size: int = 0,
         left_context_size: int = 0,
-        truncated_context_size: int = 0
+        truncated_context_size: int = 0,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute encoded features.
 
@@ -92,14 +91,12 @@ class ChunkFormerEncoderLayer(nn.Module):
             torch.Tensor: cnn_cahce tensor (#batch, size, cache_t2).
         """
 
-
         # whether to use macaron style
         if self.feed_forward_macaron is not None:
             residual = x
             if self.normalize_before:
                 x = self.norm_ff_macaron(x)
-            x = residual + self.ff_scale * self.dropout(
-                self.feed_forward_macaron(x))
+            x = residual + self.ff_scale * self.dropout(self.feed_forward_macaron(x))
             if not self.normalize_before:
                 x = self.norm_ff_macaron(x)
 
@@ -109,10 +106,16 @@ class ChunkFormerEncoderLayer(nn.Module):
             x = self.norm_mha(x)
 
         x_att, new_att_cache = self.self_attn.forward_parallel_chunk(
-            x, x, x, mask, pos_emb, att_cache,
+            x,
+            x,
+            x,
+            mask,
+            pos_emb,
+            att_cache,
             right_context_size=right_context_size,
             left_context_size=left_context_size,
-            truncated_context_size=truncated_context_size)
+            truncated_context_size=truncated_context_size,
+        )
 
         x = residual + self.dropout(x_att)
         if not self.normalize_before:
@@ -127,25 +130,24 @@ class ChunkFormerEncoderLayer(nn.Module):
                 x = self.norm_conv(x)
 
             x, new_cnn_cache = self.conv_module.forward_parallel_chunk(
-                x, mask_pad,
-                cnn_cache,
-                truncated_context_size=truncated_context_size)
+                x, mask_pad, cnn_cache, truncated_context_size=truncated_context_size
+            )
 
             x = residual + self.dropout(x)
 
             if not self.normalize_before:
                 x = self.norm_conv(x)
         # feed forward module
-        residual = x
-        if self.normalize_before:
-            x = self.norm_ff(x)
+        if self.feed_forward is not None:
+            residual = x
+            if self.normalize_before:
+                x = self.norm_ff(x)
 
-        x = residual + self.ff_scale * self.dropout(self.feed_forward(x))
-        if not self.normalize_before:
-            x = self.norm_ff(x)
+            x = residual + self.ff_scale * self.dropout(self.feed_forward(x))
+            if not self.normalize_before:
+                x = self.norm_ff(x)
 
         if self.conv_module is not None:
             x = self.norm_final(x)
-
 
         return x, mask, new_att_cache, new_cnn_cache
