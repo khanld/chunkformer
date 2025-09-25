@@ -19,9 +19,9 @@ from tqdm import tqdm
 from transformers import PretrainedConfig, PreTrainedModel
 from transformers.utils import logging
 
-from .model.utils.checkpoint import load_checkpoint
-from .model.utils.ctc_utils import get_output, get_output_with_timestamps
-from .model.utils.file_utils import read_symbol_table
+from chunkformer.utils.checkpoint import load_checkpoint
+from chunkformer.utils.ctc_utils import get_output, get_output_with_timestamps
+from chunkformer.utils.file_utils import read_symbol_table
 
 # Import ChunkFormer modules
 
@@ -156,11 +156,11 @@ class ChunkFormerModel(PreTrainedModel):
 
     def _init_model_from_config(self):
         """Initialize model from config without file dependencies."""
-        from .model.asr_model import ASRModel
-        from .model.cmvn import GlobalCMVN
-        from .model.ctc import CTC
-        from .model.encoder import ChunkFormerEncoder
-        from .model.utils.cmvn import load_cmvn
+        from chunkformer.modules.asr_model import ASRModel
+        from chunkformer.modules.cmvn import GlobalCMVN
+        from chunkformer.modules.ctc import CTC
+        from chunkformer.modules.encoder import ChunkFormerEncoder
+        from chunkformer.utils.cmvn import load_cmvn
 
         # Handle CMVN
         global_cmvn = None
@@ -213,7 +213,7 @@ class ChunkFormerModel(PreTrainedModel):
         ctc = CTC(vocab_size, encoder._output_size)
 
         # Initialize full model
-        model = ASRModel(vocab_size=vocab_size, encoder=encoder, ctc=ctc)
+        model = ASRModel(vocab_size=vocab_size, encoder=encoder, ctc=ctc, decoder=None)
 
         return model
 
@@ -382,7 +382,7 @@ class ChunkFormerModel(PreTrainedModel):
         )
 
         # Get CTC outputs using our wrapper method
-        ctc_logits = self.ctc_forward(encoder_out, encoder_lens, n_chunks)
+        ctc_logits = self.model.ctc.log_softmax(encoder_out)
 
         return {
             "logits": ctc_logits,
@@ -430,10 +430,6 @@ class ChunkFormerModel(PreTrainedModel):
             offset=offset,
         )
 
-    def ctc_forward(self, encoder_out, encoder_lens=None, n_chunks=None):
-        """Apply CTC to encoder outputs."""
-        # Always return raw logits for HF interface
-        return self.model.ctc.log_softmax(encoder_out)
 
     @torch.no_grad()
     def endless_decode(

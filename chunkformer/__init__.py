@@ -9,6 +9,6 @@ __version__ = "0.1.1"
 __author__ = "khanld"
 __email__ = "khanhld218@gmail.com"
 
-from .chunkformer_model import ChunkFormerConfig, ChunkFormerModel
+from chunkformer.chunkformer_model import ChunkFormerConfig, ChunkFormerModel
 
 __all__ = ["ChunkFormerModel", "ChunkFormerConfig", "__version__"]

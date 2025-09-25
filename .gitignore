@@ -188,3 +188,8 @@ logs/
 log/
 logs*.out
 log*.out
+
+exp
+data
+raw_wav
+tensorboard

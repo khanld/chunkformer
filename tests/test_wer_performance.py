@@ -21,7 +21,7 @@ class TestWERPerformance:
         cls.model_name = "khanhld/chunkformer-large-vie"
         cls.model = ChunkFormerModel.from_pretrained(cls.model_name)
         cls.data_dir = Path(__file__).parent.parent
-        cls.audio_list_path = cls.data_dir / "data/audio_list.tsv"
+        cls.audio_list_path = cls.data_dir / "samples/data.tsv"
 
         # Load test data
         assert cls.audio_list_path.exists(), f"Audio list file not found: {cls.audio_list_path}"

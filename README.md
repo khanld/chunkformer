@@ -104,7 +104,7 @@ for i, transcription in enumerate(transcriptions):
 After installation, you can use the command line interface:
 
 #### Long-Form Audio Testing
-To test the model with a single [long-form audio file](data/common_voice_vi_23397238.wav). Audio file extensions ".mp3", ".wav", ".flac", ".m4a", ".aac" are accepted:
+To test the model with a single [long-form audio file](samples/audios/audio_1.wav). Audio file extensions ".mp3", ".wav", ".flac", ".m4a", ".aac" are accepted:
 ```bash
 chunkformer-decode \
     --model_checkpoint path/to/hf/checkpoint/repo \
@@ -121,12 +121,12 @@ Example Output:
 ```
 
 #### Batch Transcription Testing
-The [audio_list.tsv](data/audio_list.tsv) file must have at least one column named **wav**. Optionally, a column named **txt** can be included to compute the **Word Error Rate (WER)**. Output will be saved to the same file.
+The [data.tsv](samples/data.tsv) file must have at least one column named **wav**. Optionally, a column named **txt** can be included to compute the **Word Error Rate (WER)**. Output will be saved to the same file.
 
 ```bash
 chunkformer-decode \
     --model_checkpoint path/to/hf/checkpoint/repo \
-    --audio_list path/to/audio_list.tsv \
+    --audio_list path/to/data.tsv \
     --total_batch_duration 14400 \
     --chunk_size 64 \
     --left_context_size 128 \
@@ -141,59 +141,7 @@ WER: 0.1234
 
 <a name = "training" ></a>
 ## Training
-For training/finetuning ChunkFormer models, follow the implementation in this [WeNet PR](https://github.com/wenet-e2e/wenet/pull/2723).
-
-### Setting Up Your Model for Inference
-After training is complete, you need to prepare your model for use with this library. Follow these steps:
-
-#### Step 1: Create Model Directory
-```bash
-mkdir my_chunkformer_model
-cd my_chunkformer_model
-```
-
-#### Step 2: Copy Required Files
-Copy the following files from your training output to the model directory:
-
-1. **Model Checkpoint**
-   ```bash
-   # Supported formats: .pt, .ckpt, .bin.
-   # Wenet uses .pt by default
-   cp /path/to/your/final.pt pytorch_model.pt
-   ```
-
-2. **Training Configuration**
-   ```bash
-   cp /path/to/your/train.yaml config.yaml
-   ```
-
-3. **CMVN Statistics**
-   ```bash
-   cp /path/to/your/global_cmvn global_cmvn
-   ```
-
-4. **Vocabulary File (_units.txt)**:
-   ```bash
-   cp /path/to/your/_units.txt vocab.txt
-   ```
-
-#### Step 3: Verify Model Structure
-Your model directory should look like this:
-```
-my_chunkformer_model/
-├── pytorch_model.pt (or .ckpt/.bin)
-├── config.yaml
-├── global_cmvn
-└── vocab.txt
-```
-
-#### Step 4: Test Your Local Model Directory
-```python
-import chunkformer
-model = chunkformer.ChunkFormerModel.from_pretrained("./my_chunkformer_model")
-result = model.endless_decode("test_audio.wav")
-print(result)
-```
+IN PROGRESS
 
 <a name = "citation" ></a>
 ## Citation
