@@ -56,7 +56,7 @@ isort --profile black --line-length=100 .
 flake8 .
 
 # Or with explicit parameters
-flake8 . --max-line-length=100 --extend-ignore=E203,W503,B008,C416,EXE001
+flake8 . --max-line-length=100 --extend-ignore=E203,W503,B008,C416,EXE001,E741
 
 # Type check
 mypy chunkformer --ignore-missing-imports

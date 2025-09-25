@@ -3,12 +3,12 @@
 # Copyright [2023-11-28] <sxc19@mails.tsinghua.edu.cn, Xingchen Song>
 import torch
 from torch.nn import BatchNorm1d, LayerNorm
-from chunkformer.modules.norm import RMSNorm
-from chunkformer.modules.swish import Swish
-from chunkformer.modules.attention import (MultiHeadedAttention,
-                                         MultiHeadedCrossAttention,)
+
+from chunkformer.modules.attention import MultiHeadedAttention, MultiHeadedCrossAttention
 from chunkformer.modules.embedding import PositionalEncoding
+from chunkformer.modules.norm import RMSNorm
 from chunkformer.modules.positionwise_feed_forward import PositionwiseFeedForward
+from chunkformer.modules.swish import Swish
 
 WENET_ACTIVATION_CLASSES = {
     "hardtanh": torch.nn.Hardtanh,
@@ -26,16 +26,9 @@ WENET_RNN_CLASSES = {
 }
 
 
-WENET_NORM_CLASSES = {
-    'layer_norm': LayerNorm,
-    'batch_norm': BatchNorm1d,
-    'rms_norm': RMSNorm
-}
+WENET_NORM_CLASSES = {"layer_norm": LayerNorm, "batch_norm": BatchNorm1d, "rms_norm": RMSNorm}
 
-WENET_ATTENTION_CLASSES = {
-    "selfattn": MultiHeadedAttention,
-    "crossattn": MultiHeadedCrossAttention
-}
+WENET_ATTENTION_CLASSES = {"selfattn": MultiHeadedAttention, "crossattn": MultiHeadedCrossAttention}
 
 WENET_EMB_CLASSES = {
     "embed": PositionalEncoding,
@@ -43,5 +36,5 @@ WENET_EMB_CLASSES = {
 }
 
 WENET_MLP_CLASSES = {
-    'position_wise_feed_forward': PositionwiseFeedForward,
+    "position_wise_feed_forward": PositionwiseFeedForward,
 }

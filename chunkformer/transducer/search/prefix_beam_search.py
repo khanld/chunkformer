@@ -1,12 +1,13 @@
 from typing import List, Tuple
 
 import torch
+
 from chunkformer.utils.common import log_add
 
 
-class Sequence():
+class Sequence:
 
-    __slots__ = {'hyp', 'score', 'cache'}
+    __slots__ = {"hyp", "score", "cache"}
 
     def __init__(
         self,
@@ -19,7 +20,7 @@ class Sequence():
         self.cache = cache
 
 
-class PrefixBeamSearch():
+class PrefixBeamSearch:
 
     def __init__(self, encoder, predictor, joint, ctc, blank):
         self.encoder = encoder
@@ -29,27 +30,27 @@ class PrefixBeamSearch():
         self.blank = blank
 
     def forward_decoder_one_step(
-            self, encoder_x: torch.Tensor, pre_t: torch.Tensor,
-            cache: List[torch.Tensor]
+        self, encoder_x: torch.Tensor, pre_t: torch.Tensor, cache: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
         padding = torch.zeros(pre_t.size(0), 1, device=encoder_x.device)
-        pre_t, new_cache = self.predictor.forward_step(pre_t.unsqueeze(-1),
-                                                       padding, cache)
+        pre_t, new_cache = self.predictor.forward_step(pre_t.unsqueeze(-1), padding, cache)
         x = self.joint(encoder_x, pre_t)  # [beam, 1, 1, vocab]
         x = x.log_softmax(dim=-1)
         return x, new_cache
 
-    def prefix_beam_search(self,
-                           speech: torch.Tensor,
-                           speech_lengths: torch.Tensor,
-                           decoding_chunk_size: int = -1,
-                           beam_size: int = 5,
-                           num_decoding_left_chunks: int = -1,
-                           simulate_streaming: bool = False,
-                           ctc_weight: float = 0.3,
-                           transducer_weight: float = 0.7):
+    def prefix_beam_search(
+        self,
+        speech: torch.Tensor,
+        speech_lengths: torch.Tensor,
+        decoding_chunk_size: int = -1,
+        beam_size: int = 5,
+        num_decoding_left_chunks: int = -1,
+        simulate_streaming: bool = False,
+        ctc_weight: float = 0.3,
+        transducer_weight: float = 0.7,
+    ):
         """prefix beam search
-           also see wenet.transducer.transducer.beam_search
+        also see wenet.transducer.transducer.beam_search
         """
         assert speech.shape[0] == speech_lengths.shape[0]
         assert decoding_chunk_size != 0
@@ -59,8 +60,8 @@ class PrefixBeamSearch():
 
         # 1. Encoder
         encoder_out, _ = self.encoder(
-            speech, speech_lengths, decoding_chunk_size,
-            num_decoding_left_chunks)  # (B, maxlen, encoder_dim)
+            speech, speech_lengths, decoding_chunk_size, num_decoding_left_chunks
+        )  # (B, maxlen, encoder_dim)
         maxlen = encoder_out.size(1)
 
         ctc_probs = self.ctc.log_softmax(encoder_out).squeeze(0)
@@ -76,12 +77,9 @@ class PrefixBeamSearch():
             # 3.1 building input
             # decoder taking the last token to predict the next token
             input_hyp = [s.hyp[-1] for s in beam_init]
-            input_hyp_tensor = torch.tensor(input_hyp,
-                                            dtype=torch.int,
-                                            device=device)
+            input_hyp_tensor = torch.tensor(input_hyp, dtype=torch.int, device=device)
             # building statement from beam
-            cache_batch = self.predictor.cache_to_batch(
-                [s.cache for s in beam_init])
+            cache_batch = self.predictor.cache_to_batch([s.cache for s in beam_init])
             # build score tensor to do torch.add() function
             scores = torch.tensor([s.score for s in beam_init]).to(device)
 
@@ -97,8 +95,11 @@ class PrefixBeamSearch():
             # 3.3 shallow fusion for transducer score
             #     and ctc score where we can also add the LM score
             logp = torch.log(
-                torch.add(transducer_weight * torch.exp(logp),
-                          ctc_weight * torch.exp(ctc_probs[i].unsqueeze(0))))
+                torch.add(
+                    transducer_weight * torch.exp(logp),
+                    ctc_weight * torch.exp(ctc_probs[i].unsqueeze(0)),
+                )
+            )
 
             # 3.4 first beam prune
             top_k_logp, top_k_index = logp.topk(beam_size)  # (N, N)
@@ -112,18 +113,18 @@ class PrefixBeamSearch():
                 for t in range(beam_size):
                     # blank: only update the score
                     if top_k_index[j, t] == self.blank:
-                        new_seq = Sequence(hyp=base_seq.hyp.copy(),
-                                           score=scores[j, t].item(),
-                                           cache=base_seq.cache)
+                        new_seq = Sequence(
+                            hyp=base_seq.hyp.copy(), score=scores[j, t].item(), cache=base_seq.cache
+                        )
 
                         beam_A.append(new_seq)
                     # other unit: update hyp score statement and last
                     else:
                         hyp_new = base_seq.hyp.copy()
                         hyp_new.append(top_k_index[j, t].item())
-                        new_seq = Sequence(hyp=hyp_new,
-                                           score=scores[j, t].item(),
-                                           cache=new_cache[j])
+                        new_seq = Sequence(
+                            hyp=hyp_new, score=scores[j, t].item(), cache=new_cache[j]
+                        )
                         beam_A.append(new_seq)
 
             # 3.6 prefix fusion
@@ -134,8 +135,7 @@ class PrefixBeamSearch():
                 for t in range(len(fusion_A)):
                     # notice: A_ can not fusion with A
                     if s1.hyp == fusion_A[t].hyp:
-                        fusion_A[t].score = log_add(
-                            [fusion_A[t].score, s1.score])
+                        fusion_A[t].score = log_add([fusion_A[t].score, s1.score])
                         if_do_append = False
                         break
                 if if_do_append:

@@ -51,12 +51,13 @@ class ChunkFormerEncoderLayer(nn.Module):
         else:
             self.ff_scale = 1.0
         if self.conv_module is not None:
-            self.norm_conv = nn.LayerNorm(size, eps=1e-5)  # for the CNN module
-            self.norm_final = nn.LayerNorm(size, eps=1e-5)  # for the final output of the block
+            self.norm_conv: nn.LayerNorm = nn.LayerNorm(size, eps=1e-5)  # for the CNN module
+            self.norm_final: nn.LayerNorm = nn.LayerNorm(
+                size, eps=1e-5
+            )  # for the final output of the block
         self.dropout = nn.Dropout(dropout_rate)
         self.size = size
         self.normalize_before = normalize_before
-
 
     def forward(
         self,
@@ -99,8 +100,7 @@ class ChunkFormerEncoderLayer(nn.Module):
             residual = x
             if self.normalize_before:
                 x = self.norm_ff_macaron(x)
-            x = residual + self.ff_scale * self.dropout(
-                self.feed_forward_macaron(x))
+            x = residual + self.ff_scale * self.dropout(self.feed_forward_macaron(x))
             if not self.normalize_before:
                 x = self.norm_ff_macaron(x)
 
@@ -109,10 +109,15 @@ class ChunkFormerEncoderLayer(nn.Module):
         if self.normalize_before:
             x = self.norm_mha(x)
         x_att, new_att_cache = self.self_attn(
-            x, x, x, mask, pos_emb, att_cache,
+            x,
+            x,
+            x,
+            mask,
+            pos_emb,
+            att_cache,
             chunk_size=chunk_size,
             left_context_size=left_context_size,
-            right_context_size=right_context_size
+            right_context_size=right_context_size,
         )
         x = residual + self.dropout(x_att)
         if not self.normalize_before:
@@ -126,22 +131,21 @@ class ChunkFormerEncoderLayer(nn.Module):
             if self.normalize_before:
                 x = self.norm_conv(x)
 
-            x, new_cnn_cache = self.conv_module(
-                x, mask_pad, cnn_cache,
-                chunk_size=chunk_size)
+            x, new_cnn_cache = self.conv_module(x, mask_pad, cnn_cache, chunk_size=chunk_size)
             x = residual + self.dropout(x)
 
             if not self.normalize_before:
                 x = self.norm_conv(x)
 
         # feed forward module
-        residual = x
-        if self.normalize_before:
-            x = self.norm_ff(x)
+        if self.feed_forward is not None:
+            residual = x
+            if self.normalize_before:
+                x = self.norm_ff(x)
 
-        x = residual + self.ff_scale * self.dropout(self.feed_forward(x))
-        if not self.normalize_before:
-            x = self.norm_ff(x)
+            x = residual + self.ff_scale * self.dropout(self.feed_forward(x))
+            if not self.normalize_before:
+                x = self.norm_ff(x)
 
         if self.conv_module is not None:
             x = self.norm_final(x)

@@ -1,8 +1,9 @@
-import pandas as pd
-import csv
 import json
-import sys
 import os
+import sys
+
+import pandas as pd
+
 
 def main():
     if len(sys.argv) < 2:
@@ -30,7 +31,7 @@ def main():
             list_out.write(json.dumps(row_dict, ensure_ascii=False) + "\n")
 
     # Write the text file (key txt)
-    df['txt'] = [str(txt).strip() for txt in df['txt']]
+    df["txt"] = [str(txt).strip() for txt in df["txt"]]
     with open(text_file, "w", encoding="utf-8") as text_out:
         for _, row in df.iterrows():
             text_out.write(f"{row['key']} {row['txt']}\n")
@@ -40,6 +41,7 @@ def main():
         for _, row in df.iterrows():
             wav_out.write(f"{row['key']} {row['wav']}\n")
     print(f"Output written to {list_file}, {text_file}, and {wav_scp_file}")
+
 
 if __name__ == "__main__":
     main()

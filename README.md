@@ -141,7 +141,9 @@ WER: 0.1234
 
 <a name = "training" ></a>
 ## Training
-IN PROGRESS
+
+See **[🚀 Training Guide 🚀](examples/)** for complete documentation.
+
 
 <a name = "citation" ></a>
 ## Citation

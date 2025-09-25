@@ -4,6 +4,7 @@ import math
 from typing import Tuple, Union
 
 import torch
+import torch.nn.functional as F
 
 
 class PositionalEncoding(torch.nn.Module):
@@ -17,11 +18,9 @@ class PositionalEncoding(torch.nn.Module):
     PE(pos, 2i+1) = cos(pos/(10000^(2i/dmodel)))
     """
 
-    def __init__(self,
-                 d_model: int,
-                 dropout_rate: float,
-                 max_len: int = 5000,
-                 reverse: bool = False):
+    def __init__(
+        self, d_model: int, dropout_rate: float, max_len: int = 5000, reverse: bool = False
+    ):
         """Construct an PositionalEncoding object."""
         super().__init__()
         self.d_model = d_model
@@ -30,20 +29,19 @@ class PositionalEncoding(torch.nn.Module):
         self.max_len = max_len
 
         pe = torch.zeros(self.max_len, self.d_model)
-        position = torch.arange(0, self.max_len,
-                                dtype=torch.float32).unsqueeze(1)
+        position = torch.arange(0, self.max_len, dtype=torch.float32).unsqueeze(1)
         div_term = torch.exp(
-            torch.arange(0, self.d_model, 2, dtype=torch.float32) *
-            -(math.log(10000.0) / self.d_model))
+            torch.arange(0, self.d_model, 2, dtype=torch.float32)
+            * -(math.log(10000.0) / self.d_model)
+        )
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0)
         self.register_buffer("pe", pe)
 
-    def forward(self,
-                x: torch.Tensor,
-                offset: Union[int, torch.Tensor] = 0) \
-            -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, x: torch.Tensor, offset: Union[int, torch.Tensor] = 0
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Add positional encoding.
 
         Args:
@@ -59,11 +57,10 @@ class PositionalEncoding(torch.nn.Module):
         x = x * self.xscale + pos_emb
         return self.dropout(x), self.dropout(pos_emb)
 
-    def position_encoding(self,
-                          offset: Union[int, torch.Tensor],
-                          size: int,
-                          apply_dropout: bool = True) -> torch.Tensor:
-        """ For getting encoding in a streaming fashion
+    def position_encoding(
+        self, offset: Union[int, torch.Tensor], size: int, apply_dropout: bool = True
+    ) -> torch.Tensor:
+        """For getting encoding in a streaming fashion
 
         Attention!!!!!
         we apply dropout only once at the whole utterance level in a none
@@ -82,14 +79,13 @@ class PositionalEncoding(torch.nn.Module):
         #   https://github.com/pytorch/pytorch/issues/69434
         if isinstance(offset, int):
             assert offset + size <= self.max_len
-            pos_emb = self.pe[:, offset:offset + size]
+            pos_emb = self.pe[:, offset : offset + size]
         elif isinstance(offset, torch.Tensor) and offset.dim() == 0:  # scalar
             assert offset + size <= self.max_len
-            pos_emb = self.pe[:, offset:offset + size]
+            pos_emb = self.pe[:, offset : offset + size]
         else:  # for batched streaming decoding on GPU
             assert torch.max(offset) + size <= self.max_len
-            index = offset.unsqueeze(1) + \
-                torch.arange(0, size).to(offset.device)  # B X T
+            index = offset.unsqueeze(1) + torch.arange(0, size).to(offset.device)  # B X T
             flag = index > 0
             # remove negative offset
             index = index * flag

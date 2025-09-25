@@ -430,7 +430,6 @@ class ChunkFormerModel(PreTrainedModel):
             offset=offset,
         )
 
-
     @torch.no_grad()
     def endless_decode(
         self,
@@ -818,7 +817,7 @@ def main():
             df["decode"] = decodes
             if "txt" in df.columns:
                 wer = jiwer.wer(df["txt"].to_list(), decodes)
-                print(f"Word Error Rate (WER): {wer:.4f}")
+                print(f"Word Error Rate (WER): {wer:.4f}")  # noqa: E231
 
             # Save results
             df.to_csv(args.audio_list, sep="\t", index=False)

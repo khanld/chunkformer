@@ -84,7 +84,7 @@ class TestWERPerformance:
                 predictions.append(predicted_text)
                 references.append(reference_text)
 
-                print(f"Audio {row['key']}:")
+                print(f"Audio {row['key']}: ")
                 print(f"  Reference: {reference_text}")
                 print(f"  Predicted: {predicted_text}")
 
@@ -99,10 +99,10 @@ class TestWERPerformance:
 
         print("\nEndless Decode Results:")
         print(f"Total samples: {len(predictions)}")
-        print(f"WER: {wer:.4f} ({wer*100:.2f}%)")
+        print(f"WER: {wer:.4f} ({wer*100:.2f}%)")  # noqa: E231
 
         # Assert WER < 10%
-        assert wer < 0.10, f"WER {wer:.4f} ({wer*100:.2f}%) exceeds 10% threshold"
+        assert wer < 0.10, f"WER {wer:.4f} ({wer*100:.2f}%) exceeds 10% threshold"  # noqa: E231
 
     def test_batch_decode_wer_performance(self):
         """Test WER performance using batch_decode method."""
@@ -146,7 +146,7 @@ class TestWERPerformance:
 
         # Print individual results
         for _, (ref, pred, key) in enumerate(zip(references, predictions, self.test_data["key"])):
-            print(f"Audio {key}:")
+            print(f"Audio {key}: ")
             print(f"  Reference: {ref}")
             print(f"  Predicted: {pred}")
 
@@ -155,10 +155,10 @@ class TestWERPerformance:
 
         print("\nBatch Decode Results:")
         print(f"Total samples: {len(predictions)}")
-        print(f"WER: {wer:.4f} ({wer*100:.2f}%)")
+        print(f"WER: {wer:.4f} ({wer*100:.2f}%)")  # noqa: E231
 
         # Assert WER < 10%
-        assert wer < 0.10, f"WER {wer:.4f} ({wer*100:.2f}%) exceeds 10% threshold"
+        assert wer < 0.10, f"WER {wer:.4f} ({wer*100:.2f}%) exceeds 10% threshold"  # noqa: E231
 
     def test_compare_decode_methods(self):
         """Compare WER performance between endless_decode and batch_decode."""
@@ -219,19 +219,21 @@ class TestWERPerformance:
         wer_diff = abs(endless_wer - batch_wer)
 
         print("\nComparison Results:")
-        print(f"Endless decode WER: {endless_wer:.4f} ({endless_wer*100:.2f}%)")
-        print(f"Batch decode WER: {batch_wer:.4f} ({batch_wer*100:.2f}%)")
-        print(f"Difference: {wer_diff:.4f} ({batch_wer*100:.2f}%)")
+        print(f"Endless decode WER: {endless_wer:.4f} ({endless_wer*100:.2f}%)")  # noqa: E231
+        print(f"Batch decode WER: {batch_wer:.4f} ({batch_wer*100:.2f}%)")  # noqa: E231
+        print(f"Difference: {wer_diff:.4f} ({batch_wer*100:.2f}%)")  # noqa: E231
 
         # Methods should produce reasonably similar results (within 5% difference)
         wer_diff = abs(endless_wer - batch_wer)
-        assert wer_diff < 0.01, f"WER difference {wer_diff:.4f} between methods is too large"
+        assert (
+            wer_diff < 0.01
+        ), f"WER difference {wer_diff:.4f} between methods is too large"  # noqa: E231,E501
 
         # Calculate WERs
         wer = jiwer.wer(batch_predictions, endless_predictions)
-        print(f"Mismatch WER: {wer:.4f} ({wer*100:.2f}%)")
+        print(f"Mismatch WER: {wer:.4f} ({wer*100:.2f}%)")  # noqa: E231
         # Both methods should have WER < 10%
-        assert wer < 0.01, f"Mismatch decode WER {wer:.4f} exceeds 5%"
+        assert wer < 0.01, f"Mismatch decode WER {wer:.4f} exceeds 5%"  # noqa: E231
 
 
 if __name__ == "__main__":

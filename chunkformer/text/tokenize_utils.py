@@ -20,9 +20,7 @@ def tokenize_by_bpe_model(sp, txt):
 
 
 def tokenize_by_seg_dict(seg_dict, txt):
-    return _tokenize_by_seg_dic_or_bpe_model(txt,
-                                             seg_dict=seg_dict,
-                                             upper=False)
+    return _tokenize_by_seg_dic_or_bpe_model(txt, seg_dict=seg_dict, upper=False)
 
 
 def _tokenize_by_seg_dic_or_bpe_model(
@@ -38,7 +36,7 @@ def _tokenize_by_seg_dic_or_bpe_model(
     tokens = []
     # CJK(China Japan Korea) unicode range is [U+4E00, U+9FFF], ref:
     # https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)
-    pattern = re.compile(r'([\u4e00-\u9fff])')
+    pattern = re.compile(r"([\u4e00-\u9fff])")
     # Example:
     #   txt   = "你好 ITS'S OKAY 的"
     #   chars = ["你", "好", " ITS'S OKAY ", "的"]
@@ -58,7 +56,7 @@ def _tokenize_by_seg_dic_or_bpe_model(
                 for en_token in ch_or_w.split():
                     en_token = en_token.strip()
                     if en_token in seg_dict:
-                        tokens.extend(seg_dict[en_token].split(' '))
+                        tokens.extend(seg_dict[en_token].split(" "))
                     else:
                         tokens.append(en_token)
 

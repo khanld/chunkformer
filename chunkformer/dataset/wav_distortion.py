@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
-import random
 import math
+import random
+import sys
 
-import torchaudio
 import torch
+import torchaudio
 
 
 def db2amp(db):
@@ -40,9 +40,9 @@ def make_poly_distortion(conf):
         The ploynomial function, which could be applied on
         a float amplitude value
     """
-    a = conf['a']
-    m = conf['m']
-    n = conf['n']
+    a = conf["a"]
+    m = conf["m"]
+    n = conf["n"]
 
     def poly_distortion(x):
         abs_x = abs(x)
@@ -69,7 +69,7 @@ def make_poly_distortion(conf):
 
 
 def make_quad_distortion():
-    return make_poly_distortion({'a': 1, 'm': 1, 'n': 1})
+    return make_poly_distortion({"a": 1, "m": 1, "n": 1})
 
 
 # the amplitude are set to max for all non-zero point
@@ -84,7 +84,7 @@ def make_max_distortion(conf):
         The max function, which could be applied on
         a float amplitude value
     """
-    max_db = conf['max_db']
+    max_db = conf["max_db"]
     if max_db:
         max_amp = db2amp(max_db)  # < 0.997
     else:
@@ -160,8 +160,8 @@ def make_fence_distortion(conf):
         The fence function, which could be applied on
         a float amplitude value
     """
-    mask_number = conf['mask_number']
-    max_db = conf['max_db']
+    mask_number = conf["mask_number"]
+    max_db = conf["max_db"]
     max_amp = db2amp(max_db)  # 0.997
     if mask_number <= 0:
         positive_mask = default_mask
@@ -208,7 +208,7 @@ def make_jag_distortion(conf):
         The jag function,which could be applied on
         a float amplitude value
     """
-    mask_number = conf['mask_number']
+    mask_number = conf["mask_number"]
     if mask_number <= 0:
         positive_mask = default_mask
         negative_mask = make_amp_mask([(-50, 0)])
@@ -251,7 +251,7 @@ def make_gain_db(conf):
         The db gain function, which could be applied on
         a float amplitude value
     """
-    db = conf['db']
+    db = conf["db"]
 
     def gain_db(x):
         return min(0.997, x * pow(10, db / 20))
@@ -288,33 +288,32 @@ def distort_chain(x, funcs, rate=0.8):
 
 # x is numpy
 def distort_wav_conf(x, distort_type, distort_conf, rate=0.1):
-    if distort_type == 'gain_db':
+    if distort_type == "gain_db":
         gain_db = make_gain_db(distort_conf)
         x = distort(x, gain_db)
-    elif distort_type == 'max_distortion':
+    elif distort_type == "max_distortion":
         max_distortion = make_max_distortion(distort_conf)
         x = distort(x, max_distortion, rate=rate)
-    elif distort_type == 'fence_distortion':
+    elif distort_type == "fence_distortion":
         fence_distortion = make_fence_distortion(distort_conf)
         x = distort(x, fence_distortion, rate=rate)
-    elif distort_type == 'jag_distortion':
+    elif distort_type == "jag_distortion":
         jag_distortion = make_jag_distortion(distort_conf)
         x = distort(x, jag_distortion, rate=rate)
-    elif distort_type == 'poly_distortion':
+    elif distort_type == "poly_distortion":
         poly_distortion = make_poly_distortion(distort_conf)
         x = distort(x, poly_distortion, rate=rate)
-    elif distort_type == 'quad_distortion':
+    elif distort_type == "quad_distortion":
         quad_distortion = make_quad_distortion()
         x = distort(x, quad_distortion, rate=rate)
-    elif distort_type == 'none_distortion':
+    elif distort_type == "none_distortion":
         pass
     else:
-        print('unsupport type')
+        print("unsupport type")
     return x
 
 
-def distort_wav_conf_and_save(distort_type, distort_conf, rate, wav_in,
-                              wav_out):
+def distort_wav_conf_and_save(distort_type, distort_conf, rate, wav_in, wav_out):
     x, sr = torchaudio.load(wav_in)
     x = x.detach().numpy()
     out = distort_wav_conf(x, distort_type, distort_conf, rate)
@@ -327,10 +326,10 @@ if __name__ == "__main__":
     wav_out = sys.argv[3]
     conf = None
     rate = 0.1
-    if distort_type == 'new_jag_distortion':
-        conf = {'mask_number': 4}
-    elif distort_type == 'new_fence_distortion':
-        conf = {'mask_number': 1, 'max_db': -30}
-    elif distort_type == 'poly_distortion':
-        conf = {'a': 4, 'm': 2, "n": 2}
+    if distort_type == "new_jag_distortion":
+        conf = {"mask_number": 4}
+    elif distort_type == "new_fence_distortion":
+        conf = {"mask_number": 1, "max_db": -30}
+    elif distort_type == "poly_distortion":
+        conf = {"a": 4, "m": 2, "n": 2}
     distort_wav_conf_and_save(distort_type, conf, rate, wav_in, wav_out)

@@ -2,6 +2,7 @@ from typing import List, Optional, Tuple
 
 import torch
 from torch import nn
+
 from chunkformer.utils.class_utils import WENET_ACTIVATION_CLASSES, WENET_RNN_CLASSES
 
 
@@ -21,20 +22,17 @@ class PredictorBase(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
-    def init_state(self,
-                   batch_size: int,
-                   device: torch.device,
-                   method: str = "zero") -> List[torch.Tensor]:
+    def init_state(
+        self, batch_size: int, device: torch.device, method: str = "zero"
+    ) -> List[torch.Tensor]:
         _, _, _ = batch_size, method, device
         raise NotImplementedError("this is a base precictor")
 
-    def batch_to_cache(self,
-                       cache: List[torch.Tensor]) -> List[List[torch.Tensor]]:
+    def batch_to_cache(self, cache: List[torch.Tensor]) -> List[List[torch.Tensor]]:
         _ = cache
         raise NotImplementedError("this is a base precictor")
 
-    def cache_to_batch(self,
-                       cache: List[List[torch.Tensor]]) -> List[torch.Tensor]:
+    def cache_to_batch(self, cache: List[List[torch.Tensor]]) -> List[torch.Tensor]:
         _ = cache
         raise NotImplementedError("this is a base precictor")
 
@@ -46,29 +44,44 @@ class PredictorBase(torch.nn.Module):
         input: torch.Tensor,
         cache: Optional[List[torch.Tensor]] = None,
     ):
-        _, _, = input, cache
+        (
+            _,
+            _,
+        ) = (
+            input,
+            cache,
+        )
         raise NotImplementedError("this is a base precictor")
 
     def forward_step(
-            self, input: torch.Tensor, padding: torch.Tensor,
-            cache: List[torch.Tensor]
+        self, input: torch.Tensor, padding: torch.Tensor, cache: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
-        _, _, _, = input, padding, cache
+        (
+            _,
+            _,
+            _,
+        ) = (
+            input,
+            padding,
+            cache,
+        )
         raise NotImplementedError("this is a base precictor")
 
 
 class RNNPredictor(PredictorBase):
 
-    def __init__(self,
-                 voca_size: int,
-                 embed_size: int,
-                 output_size: int,
-                 embed_dropout: float,
-                 hidden_size: int,
-                 num_layers: int,
-                 bias: bool = True,
-                 rnn_type: str = "lstm",
-                 dropout: float = 0.1) -> None:
+    def __init__(
+        self,
+        voca_size: int,
+        embed_size: int,
+        output_size: int,
+        embed_dropout: float,
+        hidden_size: int,
+        num_layers: int,
+        bias: bool = True,
+        rnn_type: str = "lstm",
+        dropout: float = 0.1,
+    ) -> None:
         super().__init__()
         self.n_layers = num_layers
         self.hidden_size = hidden_size
@@ -79,12 +92,14 @@ class RNNPredictor(PredictorBase):
         # NOTE(Mddct): rnn base from torch not support layer norm
         # will add layer norm and prune value in cell and layer
         # ref: https://github.com/Mddct/neural-lm/blob/main/models/gru_cell.py
-        self.rnn = WENET_RNN_CLASSES[rnn_type](input_size=embed_size,
-                                               hidden_size=hidden_size,
-                                               num_layers=num_layers,
-                                               bias=bias,
-                                               batch_first=True,
-                                               dropout=dropout)
+        self.rnn = WENET_RNN_CLASSES[rnn_type](
+            input_size=embed_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            bias=bias,
+            batch_first=True,
+            dropout=dropout,
+        )
         self.projection = nn.Linear(hidden_size, output_size)
 
     def output_size(self):
@@ -110,8 +125,7 @@ class RNNPredictor(PredictorBase):
         embed = self.dropout(embed)
         states: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
         if cache is None:
-            state = self.init_state(batch_size=input.size(0),
-                                    device=input.device)
+            state = self.init_state(batch_size=input.size(0), device=input.device)
             states = (state[0], state[1])
         else:
             assert len(cache) == 2
@@ -125,8 +139,7 @@ class RNNPredictor(PredictorBase):
         _, _ = m, c
         return out
 
-    def batch_to_cache(self,
-                       cache: List[torch.Tensor]) -> List[List[torch.Tensor]]:
+    def batch_to_cache(self, cache: List[torch.Tensor]) -> List[List[torch.Tensor]]:
         """
         Args:
            cache: [state_m, state_c]
@@ -142,13 +155,13 @@ class RNNPredictor(PredictorBase):
         assert state_ms.size(1) == state_cs.size(1)
 
         new_cache: List[List[torch.Tensor]] = []
-        for state_m, state_c in zip(torch.split(state_ms, 1, dim=1),
-                                    torch.split(state_cs, 1, dim=1)):
+        for state_m, state_c in zip(
+            torch.split(state_ms, 1, dim=1), torch.split(state_cs, 1, dim=1)
+        ):
             new_cache.append([state_m, state_c])
         return new_cache
 
-    def cache_to_batch(self,
-                       cache: List[List[torch.Tensor]]) -> List[torch.Tensor]:
+    def cache_to_batch(self, cache: List[List[torch.Tensor]]) -> List[torch.Tensor]:
         """
         Args:
             cache : [[state_m_1, state_c_1], [state_m_1, state_c_1]...]
@@ -172,19 +185,12 @@ class RNNPredictor(PredictorBase):
         # TODO(Mddct): xavier init method
         _ = method
         return [
-            torch.zeros(1 * self.n_layers,
-                        batch_size,
-                        self.hidden_size,
-                        device=device),
-            torch.zeros(1 * self.n_layers,
-                        batch_size,
-                        self.hidden_size,
-                        device=device)
+            torch.zeros(1 * self.n_layers, batch_size, self.hidden_size, device=device),
+            torch.zeros(1 * self.n_layers, batch_size, self.hidden_size, device=device),
         ]
 
     def forward_step(
-            self, input: torch.Tensor, padding: torch.Tensor,
-            cache: List[torch.Tensor]
+        self, input: torch.Tensor, padding: torch.Tensor, cache: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
         """
         Args:
@@ -215,16 +221,18 @@ class EmbeddingPredictor(PredictorBase):
     embed-> proj -> layer norm -> swish
     """
 
-    def __init__(self,
-                 voca_size: int,
-                 embed_size: int,
-                 output_size: int,
-                 embed_dropout: float,
-                 n_head: int,
-                 history_size: int = 2,
-                 activation: str = "swish",
-                 bias: bool = False,
-                 layer_norm_epsilon: float = 1e-5) -> None:
+    def __init__(
+        self,
+        voca_size: int,
+        embed_size: int,
+        output_size: int,
+        embed_dropout: float,
+        n_head: int,
+        history_size: int = 2,
+        activation: str = "swish",
+        bias: bool = False,
+        layer_norm_epsilon: float = 1e-5,
+    ) -> None:
 
         super().__init__()
         assert output_size == embed_size
@@ -232,9 +240,7 @@ class EmbeddingPredictor(PredictorBase):
         self.num_heads = n_head
         self.embed_size = embed_size
         self.context_size = history_size + 1
-        self.pos_embed = torch.nn.Linear(embed_size * self.context_size,
-                                         self.num_heads,
-                                         bias=bias)
+        self.pos_embed = torch.nn.Linear(embed_size * self.context_size, self.num_heads, bias=bias)
         self.embed = nn.Embedding(voca_size, self.embed_size)
         self.embed_dropout = nn.Dropout(p=embed_dropout)
         self.ffn = nn.Linear(self.embed_size, self.embed_size)
@@ -244,21 +250,16 @@ class EmbeddingPredictor(PredictorBase):
     def output_size(self):
         return self.embed_size
 
-    def init_state(self,
-                   batch_size: int,
-                   device: torch.device,
-                   method: str = "zero") -> List[torch.Tensor]:
+    def init_state(
+        self, batch_size: int, device: torch.device, method: str = "zero"
+    ) -> List[torch.Tensor]:
         assert batch_size > 0
         _ = method
         return [
-            torch.zeros(batch_size,
-                        self.context_size - 1,
-                        self.embed_size,
-                        device=device),
+            torch.zeros(batch_size, self.context_size - 1, self.embed_size, device=device),
         ]
 
-    def batch_to_cache(self,
-                       cache: List[torch.Tensor]) -> List[List[torch.Tensor]]:
+    def batch_to_cache(self, cache: List[torch.Tensor]) -> List[List[torch.Tensor]]:
         """
         Args:
             cache : [history]
@@ -273,8 +274,7 @@ class EmbeddingPredictor(PredictorBase):
             history.append([h])
         return history
 
-    def cache_to_batch(self,
-                       cache: List[List[torch.Tensor]]) -> List[torch.Tensor]:
+    def cache_to_batch(self, cache: List[List[torch.Tensor]]) -> List[torch.Tensor]:
         """
         Args:
             cache : [[history_1], [history_2], [history3]...]
@@ -286,11 +286,8 @@ class EmbeddingPredictor(PredictorBase):
         history = torch.cat([h[0] for h in cache], dim=0)
         return [history]
 
-    def forward(self,
-                input: torch.Tensor,
-                cache: Optional[List[torch.Tensor]] = None):
-        """ forward for training
-        """
+    def forward(self, input: torch.Tensor, cache: Optional[List[torch.Tensor]] = None):
+        """forward for training"""
         input = self.embed(input)  # [bs, seq_len, embed]
         input = self.embed_dropout(input)
         if cache is None:
@@ -299,28 +296,26 @@ class EmbeddingPredictor(PredictorBase):
             assert len(cache) == 1
             zeros = cache[0]
 
-        input = torch.cat((zeros, input),
-                          dim=1)  # [bs, context_size-1 + seq_len, embed]
+        input = torch.cat((zeros, input), dim=1)  # [bs, context_size-1 + seq_len, embed]
 
         input = input.unfold(1, self.context_size, 1).permute(
-            0, 1, 3, 2)  # [bs, seq_len, context_size, embed]
+            0, 1, 3, 2
+        )  # [bs, seq_len, context_size, embed]
         # multi head pos: [n_head, embed, context_size]
-        multi_head_pos = self.pos_embed.weight.view(self.num_heads,
-                                                    self.embed_size,
-                                                    self.context_size)
+        multi_head_pos = self.pos_embed.weight.view(
+            self.num_heads, self.embed_size, self.context_size
+        )
 
         # broadcast dot attenton
-        input_expand = input.unsqueeze(
-            2)  # [bs, seq_len, 1, context_size, embed]
-        multi_head_pos = multi_head_pos.permute(
-            0, 2, 1)  # [num_heads, context_size, embed]
+        input_expand = input.unsqueeze(2)  # [bs, seq_len, 1, context_size, embed]
+        multi_head_pos = multi_head_pos.permute(0, 2, 1)  # [num_heads, context_size, embed]
 
         # [bs, seq_len, num_heads, context_size, embed]
         weight = input_expand * multi_head_pos
         weight = weight.sum(dim=-1, keepdim=False).unsqueeze(
-            3)  # [bs, seq_len, num_heads, 1, context_size]
-        output = weight.matmul(input_expand).squeeze(
-            dim=3)  # [bs, seq_len, num_heads, embed]
+            3
+        )  # [bs, seq_len, num_heads, 1, context_size]
+        output = weight.matmul(input_expand).squeeze(dim=3)  # [bs, seq_len, num_heads, embed]
         output = output.sum(dim=2)  # [bs, seq_len, embed]
         output = output / (self.num_heads * self.context_size)
 
@@ -335,7 +330,7 @@ class EmbeddingPredictor(PredictorBase):
         padding: torch.Tensor,
         cache: List[torch.Tensor],
     ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
-        """ forward step for inference
+        """forward step for inference
         Args:
             input (torch.Tensor): [batch_size, time_step=1]
             padding (torch.Tensor): [batch_size,1], 1 is padding value
@@ -348,22 +343,20 @@ class EmbeddingPredictor(PredictorBase):
         input = self.embed(input)  # [bs, 1, embed]
         input = self.embed_dropout(input)
         context_input = torch.cat((history, input), dim=1)
-        input_expand = context_input.unsqueeze(1).unsqueeze(
-            2)  # [bs, 1, 1, context_size, embed]
+        input_expand = context_input.unsqueeze(1).unsqueeze(2)  # [bs, 1, 1, context_size, embed]
 
         # multi head pos: [n_head, embed, context_size]
-        multi_head_pos = self.pos_embed.weight.view(self.num_heads,
-                                                    self.embed_size,
-                                                    self.context_size)
+        multi_head_pos = self.pos_embed.weight.view(
+            self.num_heads, self.embed_size, self.context_size
+        )
 
-        multi_head_pos = multi_head_pos.permute(
-            0, 2, 1)  # [num_heads, context_size, embed]
+        multi_head_pos = multi_head_pos.permute(0, 2, 1)  # [num_heads, context_size, embed]
         # [bs, 1, num_heads, context_size, embed]
         weight = input_expand * multi_head_pos
         weight = weight.sum(dim=-1, keepdim=False).unsqueeze(
-            3)  # [bs, 1, num_heads, 1, context_size]
-        output = weight.matmul(input_expand).squeeze(
-            dim=3)  # [bs, 1, num_heads, embed]
+            3
+        )  # [bs, 1, num_heads, 1, context_size]
+        output = weight.matmul(input_expand).squeeze(dim=3)  # [bs, 1, num_heads, embed]
         output = output.sum(dim=2)  # [bs, 1, embed]
         output = output / (self.num_heads * self.context_size)
 
@@ -378,15 +371,17 @@ class EmbeddingPredictor(PredictorBase):
 
 class ConvPredictor(PredictorBase):
 
-    def __init__(self,
-                 voca_size: int,
-                 embed_size: int,
-                 output_size: int,
-                 embed_dropout: float,
-                 history_size: int = 2,
-                 activation: str = "relu",
-                 bias: bool = False,
-                 layer_norm_epsilon: float = 1e-5) -> None:
+    def __init__(
+        self,
+        voca_size: int,
+        embed_size: int,
+        output_size: int,
+        embed_dropout: float,
+        history_size: int = 2,
+        activation: str = "relu",
+        bias: bool = False,
+        layer_norm_epsilon: float = 1e-5,
+    ) -> None:
         super().__init__()
 
         assert embed_size == output_size
@@ -395,33 +390,28 @@ class ConvPredictor(PredictorBase):
         self.context_size = history_size + 1
         self.embed = nn.Embedding(voca_size, self.embed_size)
         self.embed_dropout = nn.Dropout(p=embed_dropout)
-        self.conv = nn.Conv1d(in_channels=embed_size,
-                              out_channels=embed_size,
-                              kernel_size=self.context_size,
-                              padding=0,
-                              groups=embed_size,
-                              bias=bias)
+        self.conv = nn.Conv1d(
+            in_channels=embed_size,
+            out_channels=embed_size,
+            kernel_size=self.context_size,
+            padding=0,
+            groups=embed_size,
+            bias=bias,
+        )
         self.norm = nn.LayerNorm(embed_size, eps=layer_norm_epsilon)
         self.activatoin = WENET_ACTIVATION_CLASSES[activation]()
 
     def output_size(self):
         return self.embed_size
 
-    def init_state(self,
-                   batch_size: int,
-                   device: torch.device,
-                   method: str = "zero") -> List[torch.Tensor]:
+    def init_state(
+        self, batch_size: int, device: torch.device, method: str = "zero"
+    ) -> List[torch.Tensor]:
         assert batch_size > 0
         assert method == "zero"
-        return [
-            torch.zeros(batch_size,
-                        self.context_size - 1,
-                        self.embed_size,
-                        device=device)
-        ]
+        return [torch.zeros(batch_size, self.context_size - 1, self.embed_size, device=device)]
 
-    def cache_to_batch(self,
-                       cache: List[List[torch.Tensor]]) -> List[torch.Tensor]:
+    def cache_to_batch(self, cache: List[List[torch.Tensor]]) -> List[torch.Tensor]:
         """
         Args:
             cache : [[history_1], [history_2], [history3]...]
@@ -433,8 +423,7 @@ class ConvPredictor(PredictorBase):
         history = torch.cat([h[0] for h in cache], dim=0)
         return [history]
 
-    def batch_to_cache(self,
-                       cache: List[torch.Tensor]) -> List[List[torch.Tensor]]:
+    def batch_to_cache(self, cache: List[torch.Tensor]) -> List[List[torch.Tensor]]:
         """
         Args:
             cache : [history]
@@ -449,11 +438,8 @@ class ConvPredictor(PredictorBase):
             history.append([h])
         return history
 
-    def forward(self,
-                input: torch.Tensor,
-                cache: Optional[List[torch.Tensor]] = None):
-        """ forward for training
-        """
+    def forward(self, input: torch.Tensor, cache: Optional[List[torch.Tensor]] = None):
+        """forward for training"""
         input = self.embed(input)  # [bs, seq_len, embed]
         input = self.embed_dropout(input)
         if cache is None:
@@ -462,18 +448,16 @@ class ConvPredictor(PredictorBase):
             assert len(cache) == 1
             zeros = cache[0]
 
-        input = torch.cat((zeros, input),
-                          dim=1)  # [bs, context_size-1 + seq_len, embed]
+        input = torch.cat((zeros, input), dim=1)  # [bs, context_size-1 + seq_len, embed]
         input = input.permute(0, 2, 1)
         out = self.conv(input).permute(0, 2, 1)
         out = self.activatoin(self.norm(out))
         return out
 
     def forward_step(
-            self, input: torch.Tensor, padding: torch.Tensor,
-            cache: List[torch.Tensor]
+        self, input: torch.Tensor, padding: torch.Tensor, cache: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
-        """ forward step for inference
+        """forward step for inference
         Args:
             input (torch.Tensor): [batch_size, time_step=1]
             padding (torch.Tensor): [batch_size,1], 1 is padding value

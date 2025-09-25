@@ -48,7 +48,7 @@ class DecoderLayer(nn.Module):
         feed_forward: nn.Module,
         dropout_rate: float,
         normalize_before: bool = True,
-        layer_norm_type: str = 'layer_norm',
+        layer_norm_type: str = "layer_norm",
         norm_eps: float = 1e-5,
     ):
         """Construct an DecoderLayer object."""
@@ -57,7 +57,7 @@ class DecoderLayer(nn.Module):
         self.self_attn = self_attn
         self.src_attn = src_attn
         self.feed_forward = feed_forward
-        assert layer_norm_type in ['layer_norm', 'rms_norm']
+        assert layer_norm_type in ["layer_norm", "rms_norm"]
         self.norm1 = WENET_NORM_CLASSES[layer_norm_type](size, eps=norm_eps)
         self.norm2 = WENET_NORM_CLASSES[layer_norm_type](size, eps=norm_eps)
         self.norm3 = WENET_NORM_CLASSES[layer_norm_type](size, eps=norm_eps)
@@ -70,7 +70,7 @@ class DecoderLayer(nn.Module):
         tgt_mask: torch.Tensor,
         memory: torch.Tensor,
         memory_mask: torch.Tensor,
-        cache: Optional[Dict[str, Optional[torch.Tensor]]] = None
+        cache: Optional[Dict[str, Optional[torch.Tensor]]] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute decoded features.
 
@@ -93,8 +93,8 @@ class DecoderLayer(nn.Module):
 
         """
         if cache is not None:
-            att_cache = cache['self_att_cache']
-            cross_att_cache = cache['cross_att_cache']
+            att_cache = cache["self_att_cache"]
+            cross_att_cache = cache["cross_att_cache"]
         else:
             att_cache, cross_att_cache = None, None
 
@@ -119,7 +119,7 @@ class DecoderLayer(nn.Module):
             cache=att_cache,
         )
         if cache is not None:
-            cache['self_att_cache'] = new_att_cache
+            cache["self_att_cache"] = new_att_cache
         x = residual + self.dropout(x)
         if not self.normalize_before:
             x = self.norm1(x)
@@ -129,15 +129,12 @@ class DecoderLayer(nn.Module):
             if self.normalize_before:
                 x = self.norm2(x)
             if cross_att_cache is None:
-                cross_att_cache = (torch.empty(0, 0, 0,
-                                               0), torch.empty(0, 0, 0, 0))
-            x, new_cross_cache = self.src_attn(x,
-                                               memory,
-                                               memory,
-                                               memory_mask,
-                                               cache=cross_att_cache)
+                cross_att_cache = (torch.empty(0, 0, 0, 0), torch.empty(0, 0, 0, 0))
+            x, new_cross_cache = self.src_attn(
+                x, memory, memory, memory_mask, cache=cross_att_cache
+            )
             if cache is not None:
-                cache['cross_att_cache'] = new_cross_cache
+                cache["cross_att_cache"] = new_cross_cache
             x = residual + self.dropout(x)
             if not self.normalize_before:
                 x = self.norm2(x)

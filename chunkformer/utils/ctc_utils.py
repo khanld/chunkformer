@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 from typing import List, Tuple
 
 import numpy as np
-
 import torch
 import torchaudio.functional as F
 
-def remove_duplicates_and_blank(hyp: List[int],
-                                blank_id: int = 0) -> List[int]:
+
+def remove_duplicates_and_blank(hyp: List[int], blank_id: int = 0) -> List[int]:
     new_hyp: List[int] = []
     cur = 0
     while cur < len(hyp):
@@ -32,16 +32,14 @@ def remove_duplicates_and_blank(hyp: List[int],
     return new_hyp
 
 
-def replace_duplicates_with_blank(hyp: List[int],
-                                  blank_id: int = 0) -> List[int]:
+def replace_duplicates_with_blank(hyp: List[int], blank_id: int = 0) -> List[int]:
     new_hyp: List[int] = []
     cur = 0
     while cur < len(hyp):
         new_hyp.append(hyp[cur])
         prev = cur
         cur += 1
-        while cur < len(
-                hyp) and hyp[cur] == hyp[prev] and hyp[cur] != blank_id:
+        while cur < len(hyp) and hyp[cur] == hyp[prev] and hyp[cur] != blank_id:
             new_hyp.append(blank_id)
             cur += 1
     return new_hyp
@@ -80,14 +78,14 @@ def gen_timestamps_from_peak(
         if i == 0:
             start = max(0, peaks[0] * frame_rate - half_max)
         else:
-            start = max((peaks[i - 1] + peaks[i]) / 2 * frame_rate,
-                        peaks[i] * frame_rate - half_max)
+            start = max(
+                (peaks[i - 1] + peaks[i]) / 2 * frame_rate, peaks[i] * frame_rate - half_max
+            )
 
         if i == len(peaks) - 1:
             end = min(max_duration, peaks[-1] * frame_rate + half_max)
         else:
-            end = min((peaks[i] + peaks[i + 1]) / 2 * frame_rate,
-                      peaks[i] * frame_rate + half_max)
+            end = min((peaks[i] + peaks[i + 1]) / 2 * frame_rate, peaks[i] * frame_rate + half_max)
         times.append((start, end))
     return times
 
@@ -102,7 +100,7 @@ def insert_blank(label, blank_id=0):
     return label
 
 
-def force_align(ctc_probs: torch.Tensor, y: torch.Tensor, blank_id=0) -> list:
+def force_align(ctc_probs: torch.Tensor, y: torch.Tensor, blank_id=0) -> list[int]:
     """ctc forced alignment.
 
     Args:
@@ -115,24 +113,24 @@ def force_align(ctc_probs: torch.Tensor, y: torch.Tensor, blank_id=0) -> list:
     ctc_probs = ctc_probs[None].cpu()
     y = y[None].cpu()
     alignments, _ = F.forced_align(ctc_probs, y, blank=blank_id)
-    return alignments[0]
+    result: list[int] = alignments[0].tolist()
+    return result
 
 
 def get_blank_id(configs, symbol_table):
-    if 'ctc_conf' not in configs:
-        configs['ctc_conf'] = {}
+    if "ctc_conf" not in configs:
+        configs["ctc_conf"] = {}
 
-    if '<blank>' in symbol_table:
-        if 'ctc_blank_id' in configs['ctc_conf']:
-            assert configs['ctc_conf']['ctc_blank_id'] == symbol_table[
-                '<blank>']
+    if "<blank>" in symbol_table:
+        if "ctc_blank_id" in configs["ctc_conf"]:
+            assert configs["ctc_conf"]["ctc_blank_id"] == symbol_table["<blank>"]
         else:
-            configs['ctc_conf']['ctc_blank_id'] = symbol_table['<blank>']
+            configs["ctc_conf"]["ctc_blank_id"] = symbol_table["<blank>"]
     else:
-        assert 'ctc_blank_id' in configs[
-            'ctc_conf'], "PLZ set ctc_blank_id in yaml"
+        assert "ctc_blank_id" in configs["ctc_conf"], "PLZ set ctc_blank_id in yaml"
 
-    return configs, configs['ctc_conf']['ctc_blank_id']
+    return configs, configs["ctc_conf"]["ctc_blank_id"]
+
 
 def class2str(target, char_dict):
     content = []
@@ -160,7 +158,7 @@ def milliseconds_to_hhmmssms(milliseconds):
     remaining_ms %= 1000
 
     # Format the result
-    return f"{hours:02}:{minutes:02}:{seconds:02}:{remaining_ms:03}"
+    return f"{hours:02}:{minutes:02}:{seconds:02}:{remaining_ms:03}"  # noqa: E231
 
 
 def get_output(hyps, char_dict):

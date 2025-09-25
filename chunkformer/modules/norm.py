@@ -2,8 +2,7 @@ import torch
 
 
 class RMSNorm(torch.nn.Module):
-    """ https://arxiv.org/pdf/1910.07467.pdf
-    """
+    """https://arxiv.org/pdf/1910.07467.pdf"""
 
     def __init__(
         self,

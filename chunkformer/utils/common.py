@@ -48,34 +48,25 @@ def pad_list(xs: List[torch.Tensor], pad_value: int):
     batchs = len(xs)
     ndim = xs[0].ndim
     if ndim == 1:
-        pad_res = torch.zeros(batchs,
-                              max_len,
-                              dtype=xs[0].dtype,
-                              device=xs[0].device)
+        pad_res = torch.zeros(batchs, max_len, dtype=xs[0].dtype, device=xs[0].device)
     elif ndim == 2:
-        pad_res = torch.zeros(batchs,
-                              max_len,
-                              xs[0].shape[1],
-                              dtype=xs[0].dtype,
-                              device=xs[0].device)
+        pad_res = torch.zeros(
+            batchs, max_len, xs[0].shape[1], dtype=xs[0].dtype, device=xs[0].device
+        )
     elif ndim == 3:
-        pad_res = torch.zeros(batchs,
-                              max_len,
-                              xs[0].shape[1],
-                              xs[0].shape[2],
-                              dtype=xs[0].dtype,
-                              device=xs[0].device)
+        pad_res = torch.zeros(
+            batchs, max_len, xs[0].shape[1], xs[0].shape[2], dtype=xs[0].dtype, device=xs[0].device
+        )
     else:
         raise ValueError(f"Unsupported ndim: {ndim}")
     pad_res.fill_(pad_value)
     for i in range(batchs):
-        pad_res[i, :len(xs[i])] = xs[i]
+        pad_res[i, : len(xs[i])] = xs[i]
     return pad_res
 
 
-def add_blank(ys_pad: torch.Tensor, blank: int,
-              ignore_id: int) -> torch.Tensor:
-    """ Prepad blank for transducer predictor
+def add_blank(ys_pad: torch.Tensor, blank: int, ignore_id: int) -> torch.Tensor:
+    """Prepad blank for transducer predictor
 
     Args:
         ys_pad (torch.Tensor): batch of padded target sequences (B, Lmax)
@@ -98,17 +89,15 @@ def add_blank(ys_pad: torch.Tensor, blank: int,
                 [0,  7,  8,  9,  0,  0]])
     """
     bs = ys_pad.size(0)
-    _blank = torch.tensor([blank],
-                          dtype=torch.long,
-                          requires_grad=False,
-                          device=ys_pad.device)
+    _blank = torch.tensor([blank], dtype=torch.long, requires_grad=False, device=ys_pad.device)
     _blank = _blank.repeat(bs).unsqueeze(1)  # [bs,1]
     out = torch.cat([_blank, ys_pad], dim=1)  # [bs, Lmax+1]
     return torch.where(out == ignore_id, blank, out)
 
 
-def add_sos_eos(ys_pad: torch.Tensor, sos: int, eos: int,
-                ignore_id: int) -> Tuple[torch.Tensor, torch.Tensor]:
+def add_sos_eos(
+    ys_pad: torch.Tensor, sos: int, eos: int, ignore_id: int
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """Add <sos> and <eos> labels.
 
     Args:
@@ -139,22 +128,17 @@ def add_sos_eos(ys_pad: torch.Tensor, sos: int, eos: int,
                 [ 4,  5,  6, 11, -1, -1],
                 [ 7,  8,  9, 11, -1, -1]])
     """
-    _sos = torch.tensor([sos],
-                        dtype=torch.long,
-                        requires_grad=False,
-                        device=ys_pad.device)
-    _eos = torch.tensor([eos],
-                        dtype=torch.long,
-                        requires_grad=False,
-                        device=ys_pad.device)
+    _sos = torch.tensor([sos], dtype=torch.long, requires_grad=False, device=ys_pad.device)
+    _eos = torch.tensor([eos], dtype=torch.long, requires_grad=False, device=ys_pad.device)
     ys = [y[y != ignore_id] for y in ys_pad]  # parse padded ys
     ys_in = [torch.cat([_sos, y], dim=0) for y in ys]
     ys_out = [torch.cat([y, _eos], dim=0) for y in ys]
     return pad_list(ys_in, eos), pad_list(ys_out, ignore_id)
 
-def reverse_pad_list(ys_pad: torch.Tensor,
-                     ys_lens: torch.Tensor,
-                     pad_value: float = -1.0) -> torch.Tensor:
+
+def reverse_pad_list(
+    ys_pad: torch.Tensor, ys_lens: torch.Tensor, pad_value: float = -1.0
+) -> torch.Tensor:
     """Reverse padding for the list of tensors.
 
     Args:
@@ -174,14 +158,15 @@ def reverse_pad_list(ys_pad: torch.Tensor,
                 [9, 8, 0, 0]])
 
     """
-    r_ys_pad = pad_sequence([(torch.flip(y.int()[:i], [0]))
-                             for y, i in zip(ys_pad, ys_lens)], True,
-                            pad_value)
+    r_ys_pad = pad_sequence(
+        [(torch.flip(y.int()[:i], [0])) for y, i in zip(ys_pad, ys_lens)], True, pad_value
+    )
     return r_ys_pad
 
 
-def th_accuracy(pad_outputs: torch.Tensor, pad_targets: torch.Tensor,
-                ignore_label: int) -> torch.Tensor:
+def th_accuracy(
+    pad_outputs: torch.Tensor, pad_targets: torch.Tensor, ignore_label: int
+) -> torch.Tensor:
     """Calculate accuracy.
 
     Args:
@@ -193,11 +178,11 @@ def th_accuracy(pad_outputs: torch.Tensor, pad_targets: torch.Tensor,
         torch.Tensor: Accuracy value (0.0 - 1.0).
 
     """
-    pad_pred = pad_outputs.view(pad_targets.size(0), pad_targets.size(1),
-                                pad_outputs.size(1)).argmax(2)
+    pad_pred = pad_outputs.view(
+        pad_targets.size(0), pad_targets.size(1), pad_outputs.size(1)
+    ).argmax(2)
     mask = pad_targets != ignore_label
-    numerator = torch.sum(
-        pad_pred.masked_select(mask) == pad_targets.masked_select(mask))
+    numerator = torch.sum(pad_pred.masked_select(mask) == pad_targets.masked_select(mask))
     denominator = torch.sum(mask)
     return (numerator / denominator).detach()
 
@@ -213,14 +198,14 @@ def get_subsample(config):
         return 8
 
 
-def log_add(*args) -> float:
+def log_add(arr: list[float]) -> float:
     """
     Stable log add
     """
-    if all(a == -float('inf') for a in args):
-        return -float('inf')
-    a_max = max(args)
-    lsp = math.log(sum(math.exp(a - a_max) for a in args))
+    if all(a == -float("inf") for a in arr):
+        return -float("inf")
+    a_max: float = max(arr)
+    lsp: float = math.log(sum(math.exp(a - a_max) for a in arr))
     return a_max + lsp
 
 
@@ -231,14 +216,14 @@ def mask_to_bias(mask: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
     # attention mask bias
     # NOTE(Mddct): torch.finfo jit issues
     #     chunk_masks = (1.0 - chunk_masks) * torch.finfo(dtype).min
-    mask = (1.0 - mask) * -1.0e+10
+    mask = (1.0 - mask) * -1.0e10
     return mask
 
 
 def get_nested_attribute(obj, attr_path):
     if isinstance(obj, torch.nn.parallel.DistributedDataParallel):
         obj = obj.module
-    attributes = attr_path.split('.')
+    attributes = attr_path.split(".")
     for attr in attributes:
         obj = getattr(obj, attr)
     return obj
@@ -259,8 +244,7 @@ class StepTimer:
         self.last_time = time.time()
 
     def steps_per_second(self, cur_step, restart=True):
-        value = ((float(cur_step) - self.last_iteration) /
-                 (time.time() - self.last_time))
+        value = (float(cur_step) - self.last_iteration) / (time.time() - self.last_time)
         if restart:
             self.start()
             self.last_iteration = float(cur_step)
@@ -274,18 +258,22 @@ def tensor_to_scalar(x):
 
 
 def is_torch_npu_available() -> bool:
-    '''
-        check if torch_npu is available.
-        torch_npu is a npu adapter of PyTorch
-    '''
+    """
+    check if torch_npu is available.
+    torch_npu is a npu adapter of PyTorch
+    """
     try:
         import torch_npu  # noqa
+
         return True
     except ImportError:
         if not torch.cuda.is_available():
-            print("Module \"torch_npu\" not found. \"pip install torch_npu\" \
-                if you are using Ascend NPU, otherwise, ignore it")
+            print(
+                'Module "torch_npu" not found. "pip install torch_npu" \
+                if you are using Ascend NPU, otherwise, ignore it'
+            )
     return False
+
 
 def get_activation(act):
     """Return activation function."""
@@ -302,5 +290,6 @@ def get_activation(act):
     }
 
     return activation_funcs[act]()
+
 
 TORCH_NPU_AVAILABLE = is_torch_npu_available()

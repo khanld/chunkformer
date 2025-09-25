@@ -1,7 +1,8 @@
 """Multi-Head Attention layer definition."""
 
 import math
-from typing import Tuple, Optional
+from typing import Optional, Tuple
+
 import torch
 from torch import nn
 
@@ -16,16 +17,18 @@ class MultiHeadedAttention(nn.Module):
 
     """
 
-    def __init__(self,
-                 n_head: int,
-                 n_feat: int,
-                 dropout_rate: float,
-                 query_bias: bool = True,
-                 key_bias: bool = True,
-                 value_bias: bool = True,
-                 use_sdpa: bool = False,
-                 n_kv_head: Optional[int] = None,
-                 head_dim: Optional[int] = None):
+    def __init__(
+        self,
+        n_head: int,
+        n_feat: int,
+        dropout_rate: float,
+        query_bias: bool = True,
+        key_bias: bool = True,
+        value_bias: bool = True,
+        use_sdpa: bool = False,
+        n_kv_head: Optional[int] = None,
+        head_dim: Optional[int] = None,
+    ):
         """Construct an MultiHeadedAttention object."""
         super().__init__()
 
@@ -52,21 +55,18 @@ class MultiHeadedAttention(nn.Module):
         self.use_sdpa = use_sdpa
         self.dropout_rate = dropout_rate
 
-    def _forward_linearx(self,
-                         name: str,
-                         x: torch.Tensor,
-                         head_first: bool = True) -> torch.Tensor:
+    def _forward_linearx(self, name: str, x: torch.Tensor, head_first: bool = True) -> torch.Tensor:
         assert x.ndim >= 3
-        if name == 'query':
+        if name == "query":
             x = self.linear_q(x)
             x_shape = x.size()
             x_shape = x_shape[:-1] + torch.Size([self.h, self.d_k])
-        elif name == 'key':
+        elif name == "key":
             x = self.linear_k(x)
             x_shape = x.size()
             x_shape = x_shape[:-1] + torch.Size([self.h_kv, self.d_k])
         else:
-            assert name == 'value'
+            assert name == "value"
             x = self.linear_v(x)
             x_shape = x.size()
             x_shape = x_shape[:-1] + torch.Size([self.h_kv, self.d_k])
@@ -74,8 +74,7 @@ class MultiHeadedAttention(nn.Module):
         # split last dim
         x = x.view(x_shape)
         if head_first:
-            x = x.transpose(-3,
-                            -2)  # (batch, ...,  head or head_kv, time, d_k)
+            x = x.transpose(-3, -2)  # (batch, ...,  head or head_kv, time, d_k)
         return x
 
     def forward_qkv(
@@ -97,16 +96,16 @@ class MultiHeadedAttention(nn.Module):
                 (#batch, n_head, time2, d_k).
 
         """
-        q = self._forward_linearx('query', query)
-        k = self._forward_linearx('key', key)
-        v = self._forward_linearx('value', value)
+        q = self._forward_linearx("query", query)
+        k = self._forward_linearx("key", key)
+        v = self._forward_linearx("value", value)
         return q, k, v
 
     def forward_attention(
         self,
         value: torch.Tensor,
         scores: torch.Tensor,
-        mask: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool)
+        mask: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool),
     ) -> torch.Tensor:
         """Compute attention context vector.
 
@@ -130,17 +129,18 @@ class MultiHeadedAttention(nn.Module):
         if mask.size(-1) > 0:  # time2 > 0
             mask = mask.unsqueeze(-3).eq(0)  # (batch, .., 1, *, time2)
             # For last chunk, time2 might be larger than scores.size(-1)
-            mask = mask[..., :scores.size(-1)]  # (batch, 1, *, time2)
-            scores = scores.masked_fill(mask, -float('inf'))
-            attn = torch.softmax(scores.float(),
-                                 dim=-1).type_as(value).masked_fill(
-                                     mask, 0.0)  # (batch, head, time1, time2)
+            mask = mask[..., : scores.size(-1)]  # (batch, 1, *, time2)
+            scores = scores.masked_fill(mask, -float("inf"))
+            attn = (
+                torch.softmax(scores.float(), dim=-1).type_as(value).masked_fill(mask, 0.0)
+            )  # (batch, head, time1, time2)
         # NOTE(xcsong): When will `if mask.size(2) > 0` be False?
         #   1. onnx(16/-1, -1/-1, 16/0)
         #   2. jit (16/-1, -1/-1, 16/0, 16/4)
         else:
             attn = torch.softmax(scores.float(), dim=-1).type_as(
-                value)  # (batch, ..., head, time1, time2)
+                value
+            )  # (batch, ..., head, time1, time2)
 
         p_attn = self.dropout(attn)
         x = torch.matmul(p_attn, value)  # (batch, ...,  head, time1, d_k)
@@ -265,15 +265,18 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
             storage_offset=n_stride * (time1 - 1),
         )
 
-    def forward(self, query: torch.Tensor,
-                key: torch.Tensor, value: torch.Tensor,
-                mask: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool),
-                pos_emb: torch.Tensor = torch.empty(0),
-                cache: torch.Tensor = torch.zeros((0, 0, 0, 0)),
-                chunk_size: int = 0,
-                left_context_size: int = 0,
-                right_context_size: int = 0,
-                ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        mask: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool),
+        pos_emb: torch.Tensor = torch.empty(0),
+        cache: torch.Tensor = torch.zeros((0, 0, 0, 0)),
+        chunk_size: int = 0,
+        left_context_size: int = 0,
+        right_context_size: int = 0,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute 'Scaled Dot Product Attention' with rel. positional encoding.
         Args:
             query (torch.Tensor): Query tensor (#batch, time1, size).
@@ -300,9 +303,7 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
         q, k, v = self.forward_qkv(query, key, value)
         q = q.transpose(1, 2)  # (batch, time1, head, d_k)
 
-        limited_context_attn = (chunk_size > 0
-                                and left_context_size > 0
-                                and right_context_size > 0)
+        limited_context_attn = chunk_size > 0 and left_context_size > 0 and right_context_size > 0
 
         # NOTE(xcsong):
         #   when export onnx model, for 1st chunk, we feed
@@ -321,8 +322,7 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
         # >>> d = torch.split(a, 2, dim=-1)
         # >>> torch.equal(d[0], d[1])  # True
         if cache.size(2) > 0:
-            key_cache, value_cache = torch.split(
-                cache, cache.size(-1) // 2, dim=-1)
+            key_cache, value_cache = torch.split(cache, cache.size(-1) // 2, dim=-1)
             k = torch.cat([key_cache, k], dim=2)
             v = torch.cat([value_cache, v], dim=2)
 
@@ -333,7 +333,7 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
             # chunking query
             # [B, time1, head, d_k]
             q_size = q.size(1)
-            n_frames_pad = (chunk_size - ((q_size - chunk_size) % chunk_size))
+            n_frames_pad = chunk_size - ((q_size - chunk_size) % chunk_size)
             n_frames_pad = n_frames_pad % chunk_size
             q = torch.nn.functional.pad(q, (0, 0, 0, 0, 0, n_frames_pad))
             # [B, n_chunks, head, d_k, q_size]
@@ -347,13 +347,12 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
             # (batch, head, time1, d_k * 2)
             kv = torch.cat([k, v], dim=-1)
             kv = torch.nn.functional.pad(
-                kv,
-                (0, 0, left_context_size, n_frames_pad + right_context_size))
+                kv, (0, 0, left_context_size, n_frames_pad + right_context_size)
+            )
             # [B, head, n_chunks, d_k * 2, l + c + r]
             kv = kv.unfold(
-                2,
-                size=left_context_size + chunk_size + right_context_size,
-                step=chunk_size)
+                2, size=left_context_size + chunk_size + right_context_size, step=chunk_size
+            )
             # [B, n_chunks, head, l + c + r, d_k * 2]
             kv = kv.permute(0, 2, 1, 4, 3)
             # [B * n_chunks, head, l + c + r, d_k * 2]
@@ -370,13 +369,12 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
 
             # Chunking mask for key and value
             mask_kv = torch.nn.functional.pad(
-                mask,
-                (left_context_size, n_frames_pad + right_context_size))
+                mask, (left_context_size, n_frames_pad + right_context_size)
+            )
             # [B, 1, n_chunks, chunk_size]
             mask_kv = mask_kv.unfold(
-                -1,
-                size=left_context_size + chunk_size + right_context_size,
-                step=chunk_size)
+                -1, size=left_context_size + chunk_size + right_context_size, step=chunk_size
+            )
             # [B, * n_chunks, chunk_size]
             mask_kv = mask_kv.reshape(-1, mask_kv.size(3))
 
@@ -409,8 +407,7 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
         # Add relative shift with left and right context inclusion, it can stream
         matrix_bd = self.rel_shift(matrix_bd, left_context_size, right_context_size)
 
-        scores = (matrix_ac + matrix_bd) / math.sqrt(
-            self.d_k)  # (batch, head, time1, time2)
+        scores = (matrix_ac + matrix_bd) / math.sqrt(self.d_k)  # (batch, head, time1, time2)
 
         attn_output = self.forward_attention(v, scores, mask)
         if limited_context_attn:
@@ -509,18 +506,29 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
 
 class MultiHeadedCrossAttention(MultiHeadedAttention):
 
-    def __init__(self,
-                 n_head: int,
-                 n_feat: int,
-                 dropout_rate: float,
-                 query_bias: bool = True,
-                 key_bias: bool = True,
-                 value_bias: bool = True,
-                 use_sdpa: bool = False,
-                 n_kv_head: Optional[int] = None,
-                 head_dim: Optional[int] = None):
-        super().__init__(n_head, n_feat, dropout_rate, query_bias, key_bias,
-                         value_bias, use_sdpa, n_kv_head, head_dim)
+    def __init__(
+        self,
+        n_head: int,
+        n_feat: int,
+        dropout_rate: float,
+        query_bias: bool = True,
+        key_bias: bool = True,
+        value_bias: bool = True,
+        use_sdpa: bool = False,
+        n_kv_head: Optional[int] = None,
+        head_dim: Optional[int] = None,
+    ):
+        super().__init__(
+            n_head,
+            n_feat,
+            dropout_rate,
+            query_bias,
+            key_bias,
+            value_bias,
+            use_sdpa,
+            n_kv_head,
+            head_dim,
+        )
 
     def forward(
         self,
@@ -529,14 +537,14 @@ class MultiHeadedCrossAttention(MultiHeadedAttention):
         value: torch.Tensor,
         mask: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool),
         pos_emb: torch.Tensor = torch.empty(0),
-        cache: torch.Tensor = torch.zeros((0, 0, 0, 0))
+        cache: torch.Tensor = torch.zeros((0, 0, 0, 0)),
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         del pos_emb
         key_cache, value_cache = cache
         assert key_cache.size(0) == value_cache.size(0)
         if key_cache.size(0) > 0:
             assert not self.training
-            q = self._forward_linearx('query', query)
+            q = self._forward_linearx("query", query)
             k, v = key_cache, value_cache
 
         else:

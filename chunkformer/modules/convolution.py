@@ -98,7 +98,6 @@ class ChunkConvolutionModule(nn.Module):
         )
         self.activation = activation
 
-
     def forward(
         self,
         x: torch.Tensor,
@@ -133,12 +132,12 @@ class ChunkConvolutionModule(nn.Module):
 
         if self.lorder > 0:
             if cache.size(2) == 0:  # cache_t == 0
-                x = nn.functional.pad(x, (self.lorder, 0), 'constant', 0.0)
+                x = nn.functional.pad(x, (self.lorder, 0), "constant", 0.0)
             else:
                 assert cache.size(0) == x.size(0)  # equal batch
                 assert cache.size(1) == x.size(1)  # equal channel
                 x = torch.cat((cache, x), dim=2)
-            assert (x.size(2) > self.lorder)
+            assert x.size(2) > self.lorder
             new_cache = x
         else:
             # It's better we just return None if no cache is required,
@@ -165,8 +164,7 @@ class ChunkConvolutionModule(nn.Module):
             x = x.reshape(-1, x.size(2), x.size(3))
 
             # pad right for dynamic conv
-            x = nn.functional.pad(x, (0, self.lorder), 'constant', 0.0)
-
+            x = nn.functional.pad(x, (0, self.lorder), "constant", 0.0)
 
         # 1D Depthwise Conv
         x = self.depthwise_conv(x)
@@ -179,7 +177,7 @@ class ChunkConvolutionModule(nn.Module):
             # [B, C, n_chunks * chunk_size]
             x = x.reshape(x.size(0), x.size(1), -1)
             # remove padding
-            x = x[..., :x.size(2) - n_frames_pad]
+            x = x[..., : x.size(2) - n_frames_pad]
 
         if self.use_layer_norm:
             x = x.transpose(1, 2)

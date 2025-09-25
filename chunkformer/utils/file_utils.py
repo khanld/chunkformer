@@ -17,7 +17,7 @@ import re
 
 def read_lists(list_file):
     lists = []
-    with open(list_file, 'r', encoding='utf8') as fin:
+    with open(list_file, "r", encoding="utf8") as fin:
         for line in fin:
             lists.append(line.strip())
     return lists
@@ -54,13 +54,14 @@ def read_non_lang_symbols(non_lang_sym_path):
                     "formatted in {xxx}/<xxx>/[xxx], consider"
                     " modify '%s' to meet the requirment. "
                     "More details can be found in discussions here : "
-                    "https://github.com/wenet-e2e/wenet/pull/819" % (sym))
+                    "https://github.com/wenet-e2e/wenet/pull/819" % (sym)
+                )
         return syms
 
 
 def read_symbol_table(symbol_table_file):
     symbol_table = {}
-    with open(symbol_table_file, 'r', encoding='utf8') as fin:
+    with open(symbol_table_file, "r", encoding="utf8") as fin:
         for line in fin:
             arr = line.strip().split()
             assert len(arr) == 2

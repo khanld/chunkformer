@@ -4,10 +4,36 @@ This guide will walk you through the process of training ChunkFormer models from
 
 ## Prerequisites
 
-- Python 3.8+
-- PyTorch 1.13+
-- CUDA-enabled GPU(s)
-- Required dependencies installed (`pip install -e .`)
+### 1. Clone the Repository
+```bash
+git clone https://github.com/khanld/chunkformer.git
+cd chunkformer
+```
+
+### 2. Install Conda
+Please see https://docs.conda.io/en/latest/miniconda.html
+
+### 3. Create Conda Environment
+```bash
+conda create -n chunkformer python=3.11
+conda activate chunkformer
+conda install conda-forge::sox
+```
+
+### 4. Install PyTorch & torchaudio
+It's recommended to use PyTorch 2.5.1 with CUDA 12.1, though newer versions work fine.
+```bash
+conda install pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.1 -c pytorch -c nvidia
+```
+
+### 5. Install ChunkFormer in Development Mode
+```bash
+pip install -e .
+```
+This installs ChunkFormer with all required dependencies for training and development.
+
+### 6. Training RNN-T with K2 loss
+For training RNN-T models with the k2 pruned loss, refer to this [PAGE](https://k2-fsa.github.io/k2/installation/pre-compiled-cuda-wheels-linux/index.html) to find the compatible k2 version.
 
 ## Data Preparation
 
@@ -29,7 +55,7 @@ examples/vietnamese/ctc/  # or rnnt
 ├── data/                       # MUST CREATE THIS FOLDER YOURSELF
 │   ├── train_set_name/         # Your training set folder
 │   │   └── data.tsv            # REQUIRED: Training data file
-│   ├── dev_set_name/           # Your validation set folder  
+│   ├── dev_set_name/           # Your validation set folder
 │   │   └── data.tsv            # REQUIRED: Validation data file
 │   └── test_set_name/          # Your test set folder
 │       └── data.tsv            # REQUIRED: Test data file
@@ -75,7 +101,7 @@ checkpoint=/path/to/your/checkpoint.pt
 
 # Set your dataset names (must match folder names in data/)
 train_set=train_set_name           # Your training folder name
-dev_set=dev_set_name           # Your validation folder name  
+dev_set=dev_set_name           # Your validation folder name
 recog_set=test_set_name        # Your test folder name
 
 # Training configuration
@@ -106,7 +132,7 @@ ChunkFormer training follows a 6-stage process:
 - Converts `data.tsv` files to required `.list`, `text`, and `wav.scp` formats
 - **Automatic**: No manual intervention needed
 
-#### Stage 1: Feature Generation  
+#### Stage 1: Feature Generation
 ```bash
 ./run.sh --stage 1 --stop-stage 1
 ```
@@ -171,7 +197,7 @@ $dir
 |── epoch_{epoch}.pt                  # model checkpoint at each epoch
 |── epoch_{epoch}.yaml                # Config and logs at each epoch
 ├── final.pt                          # Final model checkpoint
-├── avg_5.pt                          # Averaged checkpoint  
+├── avg_5.pt                          # Averaged checkpoint
 ├── train.yaml                        # Training config
 └── model_checkpoint_avg_5/           # Ready for inference
     ├── pytorch_model.pt              # Model weights

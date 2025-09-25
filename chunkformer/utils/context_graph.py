@@ -16,17 +16,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from chunkformer.text.tokenize_utils import tokenize_by_bpe_model
-from typing import Dict, List, Tuple
 from collections import deque
+from typing import Dict, List, Optional, Tuple
+
+from chunkformer.text.tokenize_utils import tokenize_by_bpe_model
 
 
 def tokenize(context_list_path, symbol_table, bpe_model=None):
-    """ Read biasing list from the biasing list address, tokenize and convert it
-        into token id
+    """Read biasing list from the biasing list address, tokenize and convert it
+    into token id
     """
     if bpe_model is not None:
         import sentencepiece as spm
+
         sp = spm.SentencePieceProcessor()
         sp.load(bpe_model)
     else:
@@ -45,14 +47,14 @@ def tokenize(context_list_path, symbol_table, bpe_model=None):
             tokens = tokenize_by_bpe_model(sp, context_txt)
         else:
             for ch in context_txt:
-                if ch == ' ':
+                if ch == " ":
                     ch = "▁"
                 tokens.append(ch)
         for ch in tokens:
             if ch in symbol_table:
                 labels.append(symbol_table[ch])
-            elif '<unk>' in symbol_table:
-                labels.append(symbol_table['<unk>'])
+            elif "<unk>" in symbol_table:
+                labels.append(symbol_table["<unk>"])
         context_list.append(labels)
     return context_list
 
@@ -95,9 +97,9 @@ class ContextState:
         self.node_score = node_score
         self.output_score = output_score
         self.is_end = is_end
-        self.next = {}
-        self.fail = None
-        self.output = None
+        self.next: Dict[int, "ContextState"] = {}
+        self.fail: Optional["ContextState"] = None
+        self.output: Optional[List[int]] = None
 
 
 class ContextGraph:
@@ -112,11 +114,13 @@ class ContextGraph:
     beam search.
     """
 
-    def __init__(self,
-                 context_list_path: str,
-                 symbol_table: Dict[str, int],
-                 bpe_model: str = None,
-                 context_score: float = 6.0):
+    def __init__(
+        self,
+        context_list_path: str,
+        symbol_table: Dict[str, int],
+        bpe_model: Optional[str] = None,
+        context_score: float = 6.0,
+    ):
         """Initialize a ContextGraph with the given ``context_score``.
 
         A root node will be created (**NOTE:** the token of root is hardcoded to -1).
@@ -127,8 +131,7 @@ class ContextGraph:
             word/phrase will have larger bonus score, they have to be matched though).
         """
         self.context_score = context_score
-        self.context_list = tokenize(context_list_path, symbol_table,
-                                     bpe_model)
+        self.context_list = tokenize(context_list_path, symbol_table, bpe_model)
         self.num_nodes = 0
         self.root = ContextState(
             id=self.num_nodes,
@@ -209,8 +212,7 @@ class ContextGraph:
                 node.output_score += 0 if output is None else output.output_score
                 queue.append(node)
 
-    def forward_one_step(self, state: ContextState,
-                         token: int) -> Tuple[float, ContextState]:
+    def forward_one_step(self, state: ContextState, token: int) -> Tuple[float, ContextState]:
         """Search the graph with given state and token.
 
         Args:
@@ -223,7 +225,7 @@ class ContextGraph:
           Return a tuple of score and next state.
         """
         node = None
-        score = 0
+        score = 0.0
         # token matched
         if token in state.next:
             node = state.next[token]
@@ -233,16 +235,21 @@ class ContextGraph:
             # We will trace along the fail arc until it matches the token or reaching
             # root of the graph.
             node = state.fail
-            while token not in node.next:
-                node = node.fail
-                if node.token == -1:  # root
-                    break
+            if node is not None:
+                while token not in node.next:
+                    if node.fail is not None:
+                        node = node.fail
+                    if node.token == -1:  # root
+                        break
 
-            if token in node.next:
-                node = node.next[token]
+                if token in node.next:
+                    node = node.next[token]
 
-            # The score of the fail path
-            score = node.node_score - state.node_score
+                # The score of the fail path
+                score = node.node_score - state.node_score
+            else:
+                # Fallback to root if fail is None
+                node = self.root
         assert node is not None
         return (score + node.output_score, node)
 

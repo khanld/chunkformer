@@ -13,19 +13,18 @@
 # limitations under the License.
 
 import collections
-from collections.abc import Callable
 import copy
+import logging
 import sys
 import tarfile
-import logging
-from typing import List, Optional
+from collections.abc import Callable
+from typing import Any, List, Optional
+
 import numpy as np
 import torch
-from torch.utils.data import IterDataPipe, functional_datapipe
-from torch.utils.data import datapipes
+from torch.utils.data import IterDataPipe, datapipes, functional_datapipe
 from torch.utils.data.datapipes.iter import Mapper
-from torch.utils.data.datapipes.iter.sharding import (
-    SHARDING_PRIORITIES, ShardingFilterIterDataPipe)
+from torch.utils.data.datapipes.iter.sharding import SHARDING_PRIORITIES, ShardingFilterIterDataPipe
 from torch.utils.data.datapipes.utils.common import _check_unpickable_fn
 
 from chunkformer.dataset.processor import parse_url
@@ -34,12 +33,14 @@ from chunkformer.dataset.processor import parse_url
 @functional_datapipe("map_ignore_error")
 class MapperIgnoreErrorDataPipe(Mapper):
 
-    def __init__(self,
-                 dataset: IterDataPipe,
-                 fn: Callable,
-                 input_col=None,
-                 output_col=None,
-                 log_error: bool = True) -> None:
+    def __init__(
+        self,
+        dataset: IterDataPipe,
+        fn: Callable,
+        input_col=None,
+        output_col=None,
+        log_error: bool = True,
+    ) -> None:
         super().__init__(dataset, fn, input_col, output_col)
         self._iter = None
         self.log_error = log_error
@@ -60,7 +61,7 @@ class MapperIgnoreErrorDataPipe(Mapper):
                     logging.warning(str(ex))
 
 
-@functional_datapipe('bucket_by_sequence_length')
+@functional_datapipe("bucket_by_sequence_length")
 class BucketBySequenceLengthDataPipe(IterDataPipe):
 
     def __init__(
@@ -78,10 +79,9 @@ class BucketBySequenceLengthDataPipe(IterDataPipe):
         self.bucket_boundaries = bucket_boundaries + [sys.maxsize]
         self.elem_length_func = elem_length_func
 
-        self._group_dp = GroupByWindowDataPipe(dataset,
-                                               self._element_to_bucket_id,
-                                               self._window_size_func,
-                                               wrapper_class=wrapper_class)
+        self._group_dp = GroupByWindowDataPipe(
+            dataset, self._element_to_bucket_id, self._window_size_func, wrapper_class=wrapper_class
+        )
 
     def __iter__(self):
         yield from self._group_dp
@@ -89,7 +89,7 @@ class BucketBySequenceLengthDataPipe(IterDataPipe):
     def _element_to_bucket_id(self, elem):
         seq_len = self.elem_length_func(elem)
         bucket_id = 0
-        for (i, b) in enumerate(self.bucket_boundaries):
+        for i, b in enumerate(self.bucket_boundaries):
             if seq_len < b:
                 bucket_id = i
                 break
@@ -109,18 +109,14 @@ class GroupByWindowDataPipe(datapipes.iter.Grouper):
         window_size_func,
         wrapper_class=None,
     ):
-        super().__init__(dataset,
-                         key_func,
-                         keep_key=False,
-                         group_size=None,
-                         drop_remaining=False)
+        super().__init__(dataset, key_func, keep_key=False, group_size=None, drop_remaining=False)
         _check_unpickable_fn(window_size_func)
         self.dp = dataset
         self.window_size_func = window_size_func
         if wrapper_class is not None:
             _check_unpickable_fn(wrapper_class)
             del self.wrapper_class
-            self.wrapper_class = wrapper_class
+            self.wrapper_class: Optional[Any] = wrapper_class
 
     def __iter__(self):
         for x in self.datapipe:
@@ -151,17 +147,15 @@ class GroupByWindowDataPipe(datapipes.iter.Grouper):
 @functional_datapipe("sort")
 class SortDataPipe(IterDataPipe):
 
-    def __init__(self,
-                 dataset: IterDataPipe,
-                 buffer_size: int = 500,
-                 key_func=None,
-                 reverse=False) -> None:
+    def __init__(
+        self, dataset: IterDataPipe, buffer_size: int = 500, key_func=None, reverse=False
+    ) -> None:
         if key_func is not None:
             _check_unpickable_fn(key_func)
         self.buffer_size = buffer_size
         super().__init__()
         self.dp = dataset
-        self._buffer = []
+        self._buffer: List[Any] = []
         self.key_func = key_func
         self.reverse = reverse
 
@@ -185,8 +179,7 @@ class SortDataPipe(IterDataPipe):
 @functional_datapipe("dynamic_batch")
 class DynamicBatchDataPipe(IterDataPipe):
 
-    def __init__(self, dataset: IterDataPipe, window_class,
-                 wrapper_class) -> None:
+    def __init__(self, dataset: IterDataPipe, window_class, wrapper_class) -> None:
         _check_unpickable_fn(window_class)
         _check_unpickable_fn(wrapper_class)
         super().__init__()
@@ -194,7 +187,7 @@ class DynamicBatchDataPipe(IterDataPipe):
         assert window_class is not None
         assert wrapper_class is not None
         self.window_class = window_class
-        self._buffer = []
+        self._buffer: List[Any] = []
         self._wrappr_class = wrapper_class
 
     def __iter__(self):
@@ -284,11 +277,11 @@ class ShardDataPipe(ShardingFilterIterDataPipe):
         self.partition = partition
         self.dp = dataset
 
-    def apply_sharding(self, num_of_instances: int, instance_id: int,
-                       sharding_group: SHARDING_PRIORITIES):
+    def apply_sharding(
+        self, num_of_instances: int, instance_id: int, sharding_group: SHARDING_PRIORITIES
+    ):
         if self.partition:
-            return super().apply_sharding(num_of_instances, instance_id,
-                                          sharding_group)
+            return super().apply_sharding(num_of_instances, instance_id, sharding_group)
         else:
             # We can not handle uneven data for CV on DDP, so we don't
             # sample data by rank, that means every GPU gets the same
@@ -317,8 +310,7 @@ class InterlaveDataPipe(IterDataPipe):
         self.source_datapipes = source_datapipes
         self.weights = weights
         if weights is None:
-            self.weights = [1 / len(self.source_datapipes)] * len(
-                self.source_datapipes)
+            self.weights = [1 / len(self.source_datapipes)] * len(self.source_datapipes)
         else:
             self.weights = [weight / sum(weights) for weight in weights]
         self.iters = None
@@ -327,8 +319,7 @@ class InterlaveDataPipe(IterDataPipe):
         weights = copy.deepcopy(self.weights)
         exhausted = len(self.source_datapipes) * [False]
         if self.iters is None:
-            self.iters = [(i, iter(d))
-                          for i, d in enumerate(self.source_datapipes)]
+            self.iters = [(i, iter(d)) for i, d in enumerate(self.source_datapipes)]
         while True:
             # TODO(Mddct): rng
             index_iter = self.rng.choice(self.iters, p=weights)
@@ -337,7 +328,7 @@ class InterlaveDataPipe(IterDataPipe):
                 elem = next(ite)
                 yield elem
             except StopIteration:
-                weights[i] = 0.
+                weights[i] = 0.0
                 exhausted[i] = True
                 if all(exhausted):
                     return
@@ -345,10 +336,9 @@ class InterlaveDataPipe(IterDataPipe):
 
 
 class TextLineDataPipe(IterDataPipe):
-    """ Streamming Text line
-    """
+    """Streamming Text line"""
 
-    def __init__(self, filenames, mode='r'):
+    def __init__(self, filenames, mode="r"):
         super().__init__()
         _dp = datapipes.iter.FileLister(filenames)
         _dp = datapipes.iter.FileOpener(_dp, mode=mode)
@@ -357,15 +347,14 @@ class TextLineDataPipe(IterDataPipe):
     def __iter__(self):
         for fname, stream in self.dp:
             for line in stream:
-                line = line.strip('\n')
+                line = line.strip("\n")
                 yield {"file_name": fname, "line": line}
             stream.close()
 
 
 @functional_datapipe("tar_file_and_group")
 class TarsDataPipe(IterDataPipe):
-    """ Decode wenet's tar , yield {'txt': "...", "raw": "..."}
-    """
+    """Decode wenet's tar , yield {'txt': "...", "raw": "..."}"""
 
     def __init__(self, dataset: IterDataPipe) -> None:
         super().__init__()
@@ -373,69 +362,65 @@ class TarsDataPipe(IterDataPipe):
 
     def __iter__(self):
         from wenet.dataset.processor import AUDIO_FORMAT_SETS
+
         for sample in self.dp:
-            assert 'file_name' in sample
-            assert 'line' in sample
-            assert 'stream' in sample
+            assert "file_name" in sample
+            assert "line" in sample
+            assert "stream" in sample
             try:
-                with tarfile.open(fileobj=sample['stream'],
-                                  mode="r:*") as stream:
+                with tarfile.open(fileobj=sample["stream"], mode="r:*") as stream:
                     prev_prefix = None
-                    example = {
-                        'file_name': sample['file_name'],
-                        'tar_file_name': sample['line']
-                    }
+                    example = {"file_name": sample["file_name"], "tar_file_name": sample["line"]}
                     valid = True
                     for tarinfo in stream:
                         name = tarinfo.name
-                        pos = name.rfind('.')
+                        pos = name.rfind(".")
                         assert pos > 0
-                        prefix, postfix = name[:pos], name[pos + 1:]
+                        prefix, postfix = name[:pos], name[pos + 1 :]
                         if prev_prefix is not None and prefix != prev_prefix:
-                            example['key'] = prev_prefix
+                            example["key"] = prev_prefix
                             if valid:
                                 yield example
                             example = {
-                                'file_name': sample['file_name'],
-                                'tar_file_name': sample['line']
+                                "file_name": sample["file_name"],
+                                "tar_file_name": sample["line"],
                             }
                             valid = True
                         with stream.extractfile(tarinfo) as file_obj:
                             try:
-                                if postfix == 'txt':
-                                    example['txt'] = file_obj.read().decode(
-                                        'utf8').strip()
+                                if postfix == "txt":
+                                    example["txt"] = file_obj.read().decode("utf8").strip()
                                 elif postfix in AUDIO_FORMAT_SETS:
-                                    example['wav'] = file_obj.read()
+                                    example["wav"] = file_obj.read()
                                 else:
                                     example[postfix] = file_obj.read()
                             except Exception as ex:
                                 valid = False
-                                logging.warning(
-                                    'error to parse {}'.format(name))
+                                logging.warning(f"error {ex} to parse {name}")
                             prev_prefix = prefix
                     if prev_prefix is not None:
-                        example['key'] = prev_prefix
+                        example["key"] = prev_prefix
                         yield example
             except Exception as ex:
-                msg = 'In tar_file_and_group: {} when processing {}'.format(
-                    ex, sample['line'])
+                msg = "In tar_file_and_group: {} when processing {}".format(ex, sample["line"])
                 logging.warning(msg)
             finally:
-                if 'process' in sample:
-                    sample['process'].communicate()
-                sample['stream'].close()
+                if "process" in sample:
+                    sample["process"].communicate()
+                sample["stream"].close()
 
 
 class WenetRawDatasetSource(IterDataPipe):
 
-    def __init__(self,
-                 filenames: str,
-                 prefetch: int = 500,
-                 partition: bool = True,
-                 shuffle: bool = False,
-                 shuffle_size: int = 10000,
-                 cycle: int = 1) -> None:
+    def __init__(
+        self,
+        filenames: str,
+        prefetch: int = 500,
+        partition: bool = True,
+        shuffle: bool = False,
+        shuffle_size: int = 10000,
+        cycle: int = 1,
+    ) -> None:
         super().__init__()
         self.dp = TextLineDataPipe(filenames)
         if shuffle:
@@ -450,20 +435,26 @@ class WenetRawDatasetSource(IterDataPipe):
 
 class WenetTarShardDatasetSource(IterDataPipe):
 
-    def __init__(self,
-                 filenames: str,
-                 prefetch: int = 500,
-                 partition: bool = True,
-                 shuffle: bool = False,
-                 shuffle_size: int = 10000,
-                 cycle: int = 1) -> None:
+    def __init__(
+        self,
+        filenames: str,
+        prefetch: int = 500,
+        partition: bool = True,
+        shuffle: bool = False,
+        shuffle_size: int = 10000,
+        cycle: int = 1,
+    ) -> None:
         super().__init__()
         self.dp = TextLineDataPipe(filenames)
         if shuffle:
             self.dp = self.dp.shuffle(buffer_size=shuffle_size)
         self.dp = self.dp.repeat(cycle)
-        self.dp = self.dp.shard(partition).map_ignore_error(
-            parse_url).tar_file_and_group().prefetch(prefetch)
+        self.dp = (
+            self.dp.shard(partition)
+            .map_ignore_error(parse_url)
+            .tar_file_and_group()
+            .prefetch(prefetch)
+        )
 
     def __iter__(self):
         for d in self.dp:

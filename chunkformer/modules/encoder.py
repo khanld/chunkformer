@@ -15,10 +15,10 @@
 # Modified from ESPnet(https://github.com/espnet/espnet)
 
 """Encoder definition."""
+import random
 from typing import List, Optional, Tuple
 
 import torch
-import random
 
 from chunkformer.modules.attention import ChunkAttentionWithRelativeRightContext
 from chunkformer.modules.convolution import ChunkConvolutionModule
@@ -26,10 +26,9 @@ from chunkformer.modules.embedding import RelPositionalEncodingWithRightContext
 from chunkformer.modules.encoder_layer import ChunkFormerEncoderLayer
 from chunkformer.modules.positionwise_feed_forward import PositionwiseFeedForward
 from chunkformer.modules.subsampling import DepthwiseConvSubsampling
-from chunkformer.utils.common import get_activation
+from chunkformer.utils.class_utils import WENET_ACTIVATION_CLASSES, WENET_NORM_CLASSES
 from chunkformer.utils.mask import make_pad_mask
-from chunkformer.utils.class_utils import (WENET_ACTIVATION_CLASSES,
-                                     WENET_NORM_CLASSES)
+
 
 class ChunkFormerEncoder(torch.nn.Module):
     """ChunkFormer encoder module."""
@@ -114,8 +113,7 @@ class ChunkFormerEncoder(torch.nn.Module):
         assert layer_norm_type in ["layer_norm", "rms_norm"]
         self.normalize_before = normalize_before
         self.final_norm = final_norm
-        self.after_norm = WENET_NORM_CLASSES[layer_norm_type](output_size,
-                                                              eps=norm_eps)
+        self.after_norm = WENET_NORM_CLASSES[layer_norm_type](output_size, eps=norm_eps)
         self.static_chunk_size = static_chunk_size
         self.use_dynamic_chunk = use_dynamic_chunk
         self.use_dynamic_left_chunk = use_dynamic_left_chunk
@@ -196,15 +194,17 @@ class ChunkFormerEncoder(torch.nn.Module):
 
     def limited_context_selection(self):
         full_context_training = True
-        if (self.dynamic_chunk_sizes is not None
+        if (
+            self.dynamic_chunk_sizes is not None
             and self.dynamic_left_context_sizes is not None
-                and self.dynamic_right_context_sizes is not None):
+            and self.dynamic_right_context_sizes is not None
+        ):
             chunk_size = random.choice(self.dynamic_chunk_sizes)
             left_context_size = random.choice(self.dynamic_left_context_sizes)
             right_context_size = random.choice(self.dynamic_right_context_sizes)
-            full_context_training = not (chunk_size > 0
-                                         and left_context_size > 0
-                                         and right_context_size > 0)
+            full_context_training = not (
+                chunk_size > 0 and left_context_size > 0 and right_context_size > 0
+            )
 
         if full_context_training:
             chunk_size, left_context_size, right_context_size = 0, 0, 0
@@ -242,15 +242,19 @@ class ChunkFormerEncoder(torch.nn.Module):
             xs = self.global_cmvn(xs)
 
         xs, pos_emb, masks = self.embed(
-            xs, masks,
+            xs,
+            masks,
             chunk_size=chunk_size,
             left_context_size=left_context_size,
-            right_context_size=right_context_size
+            right_context_size=right_context_size,
         )
         mask_pad = masks  # (B, 1, T/subsample_rate)
 
         xs = self.forward_layers(
-            xs, masks, pos_emb, mask_pad,
+            xs,
+            masks,
+            pos_emb,
+            mask_pad,
             chunk_size=chunk_size,
             left_context_size=left_context_size,
             right_context_size=right_context_size,
@@ -262,27 +266,36 @@ class ChunkFormerEncoder(torch.nn.Module):
         # for cross attention with decoder later
         return xs, masks
 
-    def forward_layers(self, xs: torch.Tensor, chunk_masks: torch.Tensor,
-                       pos_emb: torch.Tensor,
-                       mask_pad: torch.Tensor,
-                       chunk_size: int = 0,
-                       left_context_size: int = 0,
-                       right_context_size: int = 0) -> torch.Tensor:
+    def forward_layers(
+        self,
+        xs: torch.Tensor,
+        chunk_masks: torch.Tensor,
+        pos_emb: torch.Tensor,
+        mask_pad: torch.Tensor,
+        chunk_size: int = 0,
+        left_context_size: int = 0,
+        right_context_size: int = 0,
+    ) -> torch.Tensor:
         for idx, layer in enumerate(self.encoders):
             xs, chunk_masks, _, _ = layer(
-                xs, chunk_masks, pos_emb, mask_pad,
+                xs,
+                chunk_masks,
+                pos_emb,
+                mask_pad,
                 chunk_size=chunk_size,
                 left_context_size=left_context_size,
                 right_context_size=right_context_size,
             )
         return xs
 
-    def forward(self,
-                xs: torch.Tensor,
-                xs_lens: torch.Tensor,
-                decoding_chunk_size: int = 0,
-                num_decoding_left_chunks: int = -1,
-                **kwargs):
+    def forward(
+        self,
+        xs: torch.Tensor,
+        xs_lens: torch.Tensor,
+        decoding_chunk_size: int = 0,
+        num_decoding_left_chunks: int = -1,
+        **kwargs,
+    ):
         """
         Main forward function that dispatches to either the standard
         forward pass or the parallel chunk version based on the
@@ -293,26 +306,24 @@ class ChunkFormerEncoder(torch.nn.Module):
         if decoding_chunk_size > 0 and num_decoding_left_chunks > 0:
             # If both decoding_chunk_size and num_decoding_left_chunks
             # are set, use the parallel chunk decoding.
-            return self.forward_parallel_chunk(
+            return self.forward_encoder(
                 xs=xs,
-                xs_origin_lens=xs_lens,
+                xs_lens=xs_lens,
                 chunk_size=decoding_chunk_size,
                 left_context_size=num_decoding_left_chunks,
                 # we assume left and right context are the same
                 right_context_size=num_decoding_left_chunks,
-                **kwargs
+                **kwargs,
             )
         else:
-            (chunk_size,
-                left_context_size,
-                right_context_size) = self.limited_context_selection()
+            (chunk_size, left_context_size, right_context_size) = self.limited_context_selection()
             return self.forward_encoder(
                 xs=xs,
                 xs_lens=xs_lens,
                 chunk_size=chunk_size,
                 left_context_size=left_context_size,
                 right_context_size=right_context_size,
-                **kwargs
+                **kwargs,
             )
 
     def forward_parallel_chunk(
@@ -494,4 +505,3 @@ class ChunkFormerEncoder(torch.nn.Module):
         # NOTE(xcsong): shape(r_cnn_cache) is (e, b=1, hidden-dim, cache_t2)
         r_cnn_cache: torch.Tensor = torch.stack(r_cnn_cache, dim=0)  # type: ignore
         return xs, xs_lens, n_chunks, r_att_cache, r_cnn_cache, offset  # type: ignore[return-value]
-
