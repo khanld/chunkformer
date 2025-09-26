@@ -7,45 +7,6 @@ on:
     branches: [ main ]
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11"]
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-
-    - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics --extend-ignore=E203,W503
-
-    - name: Check code formatting with black
-      run: |
-        black --check --line-length=100 .
-
-    - name: Check imports with isort
-      run: |
-        isort --check-only --profile black --line-length=100 .
-
-    - name: Type check with mypy
-      run: |
-        mypy chunkformer --ignore-missing-imports
-      continue-on-error: true  # Allow mypy to fail without failing the entire workflow
-
   pre-commit:
     runs-on: ubuntu-latest
     steps:
