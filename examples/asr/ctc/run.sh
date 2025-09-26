@@ -1,6 +1,13 @@
 #!/bin/bash
 
-# Copyright 2019 Mobvoi Inc. All Rights Reserved.
+# Training pipeline stages:
+# Stage 0: Data Format Conversion
+# Stage 1: Feature Generation
+# Stage 2: Dictionary and Json Data Preparation
+# Stage 3: Training
+# Stage 4: Testing/Recognition
+# Stage 5: Setting up model for ChunkFormer inference
+# Stage 6: Push model to Hugging Face Hub (optional)
 
 . ./path.sh || exit 1;
 
@@ -9,7 +16,7 @@
 export CUDA_VISIBLE_DEVICES="0"
 echo "CUDA_VISIBLE_DEVICES is ${CUDA_VISIBLE_DEVICES}"
 stage=0 # start from 0 if you need to start from data preparation
-stop_stage=5
+stop_stage=6
 
 # You should change the following two parameters for multiple machine training,
 # see https://pytorch.org/docs/stable/elastic/run.html
@@ -39,6 +46,11 @@ decode_modes="ctc_greedy_search"
 # bpemode (unigram or bpe)
 nbpe=1024
 bpemode=bpe
+
+# Hugging Face Hub upload settings (optional)
+# To enable upload and set these variables:
+hf_token="hf_xxxxxxxxxxxxxxxxxxxxxxxxx"  # Your Hugging Face token
+hf_repo_id="username/chunkformer-model"   # Your repository ID
 
 set -e
 set -u
@@ -241,4 +253,57 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
   echo "You can now use it with ChunkFormer:"
   echo "import chunkformer"
   echo "model = chunkformer.ChunkFormerModel.from_pretrained('$inference_model_dir')"
+fi
+
+if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
+  # Push model to Hugging Face Hub
+  echo "stage 6: Pushing model to Hugging Face Hub"
+
+  # Determine inference model directory (in case stage 5 was skipped)
+  if [ ${average_checkpoint} == true ]; then
+    checkpoint_name="avg_${average_num}"
+  else
+    checkpoint_name="final"
+  fi
+  inference_model_dir=$dir/model_checkpoint_${checkpoint_name}
+
+  # Check if Hugging Face token and repo_id are provided
+  if [ -z "$hf_token" ] || [ -z "$hf_repo_id" ]; then
+    echo "Skipping Hugging Face upload: hf_token or hf_repo_id not provided"
+    echo "To enable upload, set the following variables in this script:"
+    echo "  hf_token=\"your_huggingface_token\""
+    echo "  hf_repo_id=\"username/repository-name\""
+    echo ""
+    echo "You can also upload manually later using:"
+    echo "  cd ../../.."  # Go to chunkformer root
+    echo "  python tools/push_model_hf.py --model_dir $inference_model_dir --repo_id username/repo-name --token your_token"
+  else
+    echo "Uploading model to Hugging Face Hub..."
+    echo "Repository: $hf_repo_id"
+    echo "Model directory: $inference_model_dir"
+
+    # Run the upload script
+    python tools/push_model_hf.py \
+      --model_dir "$inference_model_dir" \
+      --repo_id "$hf_repo_id" \
+      --token "$hf_token" \
+      --commit_message "Upload ChunkFormer model"
+
+    upload_status=$?
+
+    if [ $upload_status -eq 0 ]; then
+      echo ""
+      echo "🎉 Model successfully uploaded to Hugging Face Hub!"
+      echo "Model URL: https://huggingface.co/$hf_repo_id"
+      echo ""
+      echo "You can now load your model from anywhere with:"
+      echo "from chunkformer import ChunkFormerModel"
+      echo "model = ChunkFormerModel.from_pretrained('$hf_repo_id')"
+    else
+      echo "❌ Failed to upload model to Hugging Face Hub"
+      echo "You can try uploading manually with:"
+      echo "  cd ../../.."
+      echo "  python tools/push_model_hf.py --model_dir $inference_model_dir --repo_id $hf_repo_id --token $hf_token"
+    fi
+  fi
 fi

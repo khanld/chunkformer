@@ -123,7 +123,7 @@ For model configuration, refer to the example configuration file in `conf/v0.yam
 
 ### Stage-by-Stage Training
 
-ChunkFormer training follows a 6-stage process:
+ChunkFormer training follows a 7-stage process:
 
 #### Stage 0: Data Format Conversion
 ```bash
@@ -170,6 +170,13 @@ ChunkFormer training follows a 6-stage process:
 ```
 - Packages model for ChunkFormer inference
 - Creates `model_checkpoint_*` directory with all required files
+
+#### Stage 6: Push Model to Hugging Face Hub (Optional)
+```bash
+./run.sh --stage 6 --stop-stage 6
+```
+- Uploads the prepared model directory to the Hugging Face Hub if `hf_token` and `hf_repo_id` are set in the script.
+
 
 ## Monitoring & Outputs
 

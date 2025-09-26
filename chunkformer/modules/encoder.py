@@ -303,19 +303,7 @@ class ChunkFormerEncoder(torch.nn.Module):
         """
         # for masked batch chunk context inference
         # should add a better flag to trigger
-        if decoding_chunk_size > 0 and num_decoding_left_chunks > 0:
-            # If both decoding_chunk_size and num_decoding_left_chunks
-            # are set, use the parallel chunk decoding.
-            return self.forward_encoder(
-                xs=xs,
-                xs_lens=xs_lens,
-                chunk_size=decoding_chunk_size,
-                left_context_size=num_decoding_left_chunks,
-                # we assume left and right context are the same
-                right_context_size=num_decoding_left_chunks,
-                **kwargs,
-            )
-        else:
+        if self.training:
             (chunk_size, left_context_size, right_context_size) = self.limited_context_selection()
             return self.forward_encoder(
                 xs=xs,
@@ -323,6 +311,21 @@ class ChunkFormerEncoder(torch.nn.Module):
                 chunk_size=chunk_size,
                 left_context_size=left_context_size,
                 right_context_size=right_context_size,
+                **kwargs,
+            )
+        else:
+            # If either decoding_chunk_size or num_decoding_left_chunks
+            # is less than 0, use the full context decoding.
+            if decoding_chunk_size < 0 or num_decoding_left_chunks < 0:
+                decoding_chunk_size = 0
+                num_decoding_left_chunks = 0
+            return self.forward_encoder(
+                xs=xs,
+                xs_lens=xs_lens,
+                chunk_size=decoding_chunk_size,
+                left_context_size=num_decoding_left_chunks,
+                # we assume left and right context are the same
+                right_context_size=num_decoding_left_chunks,
                 **kwargs,
             )
 

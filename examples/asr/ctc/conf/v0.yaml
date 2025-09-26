@@ -37,9 +37,9 @@ decoder_conf:
 
 tokenizer: bpe
 tokenizer_conf:
-  symbol_table_path: 'data/lang_char/train_960_bpe5000_units.txt'
+  symbol_table_path: 'data/lang_char/train-clean-100_bpe1024_units.txt'
   split_with_space: false
-  bpe_path: 'data/lang_char/train_960_bpe5000.model'
+  bpe_path: 'data/lang_char/train-clean-100_bpe1024.model'
   non_lang_syms_path: null
   is_multilingual: false
   num_languages: 1
@@ -55,7 +55,7 @@ ctc_conf:
 
 cmvn: global_cmvn
 cmvn_conf:
-  cmvn_file: 'data/train_960/global_cmvn'
+  cmvn_file: 'data/train-clean-100/global_cmvn'
   is_json_cmvn: true
 
 # hybrid CTC/attention
@@ -105,7 +105,7 @@ dataset_conf:
         max_frames_in_batch: 120000
 
 grad_clip: 5
-accum_grad: 4
+accum_grad: 2
 max_epoch: 200
 log_interval: 100
 
@@ -114,4 +114,4 @@ optim_conf:
     lr: 0.001
 scheduler: warmuplr     # pytorch v1.1.0+ required
 scheduler_conf:
-    warmup_steps: 25000
+    warmup_steps: 15000
