@@ -671,33 +671,21 @@ def batch_forward(model, batch, scaler, info_dict, device):
     else:  # fp32
         dtype = None
 
-        # autocast context
-        # The more details about amp can be found in
-        # https://pytorch.org/docs/stable/notes/amp_examples.html
-        if "npu" in device.__str__() and TORCH_NPU_AVAILABLE:
-            amp_device = "npu"
-        else:
-            amp_device = "cuda"
-
-        def get_autocast(train_engine, dtype, scaler):
-            if train_engine == "deepspeed":
-                return torch.amp.autocast(
-                    amp_device, enabled=dtype is not None, dtype=dtype, cache_enabled=False
-                )
-            elif train_engine == "torch_ddp":
-                return torch.amp.autocast(amp_device, enabled=scaler is not None)
-            elif train_engine == "torch_fsdp":
-                return (
-                    torch.amp.autocast(amp_device, enabled=True, dtype=dtype)
-                    if dtype is not None
-                    else nullcontext()
-                )
-            else:
-                return nullcontext()
-
-        autocast = get_autocast(train_engine, dtype, scaler)
-        with autocast:
-            loss_dict = model(batch, device)
+    # autocast context
+    # The more details about amp can be found in
+    # https://pytorch.org/docs/stable/notes/amp_examples.html
+    amp_autocast = torch.cuda.amp.autocast
+    if "npu" in device.__str__() and TORCH_NPU_AVAILABLE:
+        amp_autocast = torch.npu.amp.autocast
+    autocast = {
+        "deepspeed": amp_autocast(enabled=dtype is not None, dtype=dtype, cache_enabled=False),
+        "torch_ddp": amp_autocast(enabled=scaler is not None),
+        "torch_fsdp": (
+            amp_autocast(enabled=True, dtype=dtype) if dtype is not None else nullcontext()
+        ),
+    }[train_engine]
+    with autocast:
+        loss_dict = model(batch, device)
 
     info_dict["loss_dict"] = loss_dict
     return info_dict
