@@ -95,6 +95,7 @@ fi
 
 dict=$wave_data/lang_char/${train_set}_${bpemode}${nbpe}_units.txt
 bpemodel=$wave_data/lang_char/${train_set}_${bpemode}${nbpe}
+vocab=$wave_data/lang_char/${train_set}_${bpemode}${nbpe}.vocab
 echo "dictionary: ${dict}"
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
   ### Task dependent. You have to check non-linguistic symbols used in the corpus.
