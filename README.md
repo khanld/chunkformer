@@ -165,8 +165,6 @@ If you use this work in your research, please cite:
 
 <a name = "acknowledgments" ></a>
 ## Acknowledgments
-We would like to thank Zalo for providing resources and support for training the model. This work was completed during my tenure at Zalo.
-
 This implementation is based on the WeNet framework. We extend our gratitude to the WeNet development team for providing an excellent foundation for speech recognition research and development.
 
 ---
