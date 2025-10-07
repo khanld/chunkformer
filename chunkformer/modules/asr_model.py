@@ -13,7 +13,7 @@ from chunkformer.modules.search import (
     ctc_greedy_search,
     ctc_prefix_beam_search,
 )
-from chunkformer.transducer.search.greedy_search import basic_greedy_search
+from chunkformer.transducer.search.greedy_search import greedy_search
 from chunkformer.utils.common import (
     IGNORE_ID,
     add_sos_eos,
@@ -339,7 +339,7 @@ class ASRModel(torch.nn.Module):
             )
         if "rnnt_greedy_search" in methods:
             results["rnnt_greedy_search"] = [
-                DecodeResult(hyp) for hyp in basic_greedy_search(self, encoder_out, encoder_lens)
+                DecodeResult(hyp) for hyp in greedy_search(self, encoder_out, encoder_lens)
             ]
         return results
 

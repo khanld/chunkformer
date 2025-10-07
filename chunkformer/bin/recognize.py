@@ -27,9 +27,9 @@ from chunkformer.dataset.dataset import Dataset
 from chunkformer.utils.common import TORCH_NPU_AVAILABLE  # noqa just ensure to check torch-npu
 from chunkformer.utils.config import override_config
 from chunkformer.utils.context_graph import ContextGraph
-from chunkformer.utils.ctc_utils import get_blank_id
 from chunkformer.utils.init_model import init_model
 from chunkformer.utils.init_tokenizer import init_tokenizer
+from chunkformer.utils.model_utils import get_blank_id
 
 
 def get_args():

@@ -66,6 +66,7 @@ class ChunkFormerEncoder(torch.nn.Module):
         dynamic_chunk_sizes: Optional[List] = None,
         dynamic_left_context_sizes: Optional[List] = None,
         dynamic_right_context_sizes: Optional[List] = None,
+        **kwargs,
     ):
         """Construct ChunkFormerEncoder
 

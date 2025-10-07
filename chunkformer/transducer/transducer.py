@@ -452,9 +452,7 @@ class Transducer(ASRModel):
         self, xs: torch.Tensor, cache: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
         assert len(cache) == 2
-        # fake padding
-        padding = torch.zeros(1, 1)
-        return self.predictor.forward_step(xs, padding, cache)
+        return self.predictor.forward_step(xs, cache)
 
     @torch.jit.export
     def forward_joint_step(self, enc_out: torch.Tensor, pred_out: torch.Tensor) -> torch.Tensor:

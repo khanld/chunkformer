@@ -43,7 +43,6 @@ from chunkformer.utils.common import (
     lrs_to_str,
     tensor_to_scalar,
 )
-from chunkformer.utils.ctc_utils import get_blank_id
 from chunkformer.utils.fsdp_utils import (
     apply_fsdp_checkpointing,
     check_gradient_checkpoint,
@@ -51,6 +50,7 @@ from chunkformer.utils.fsdp_utils import (
     wenet_fsdp_wrap_policy,
 )
 from chunkformer.utils.init_dataset import init_dataset
+from chunkformer.utils.model_utils import get_blank_id
 from chunkformer.utils.scheduler import NoamHoldAnnealing, WarmupLR
 
 

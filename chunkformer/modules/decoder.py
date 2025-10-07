@@ -92,6 +92,7 @@ class TransformerDecoder(torch.nn.Module):
         src_query_bias: bool = True,
         src_key_bias: bool = True,
         src_value_bias: bool = True,
+        **kwargs,
     ):
         super().__init__()
         attention_dim = encoder_output_size

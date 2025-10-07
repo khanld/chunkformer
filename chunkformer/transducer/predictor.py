@@ -54,15 +54,13 @@ class PredictorBase(torch.nn.Module):
         raise NotImplementedError("this is a base precictor")
 
     def forward_step(
-        self, input: torch.Tensor, padding: torch.Tensor, cache: List[torch.Tensor]
+        self, input: torch.Tensor, cache: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
         (
             _,
             _,
-            _,
         ) = (
             input,
-            padding,
             cache,
         )
         raise NotImplementedError("this is a base precictor")
@@ -190,12 +188,11 @@ class RNNPredictor(PredictorBase):
         ]
 
     def forward_step(
-        self, input: torch.Tensor, padding: torch.Tensor, cache: List[torch.Tensor]
+        self, input: torch.Tensor, cache: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
         """
         Args:
             input (torch.Tensor): [batch_size, time_step=1]
-            padding (torch.Tensor): [batch_size,1], 1 is padding value
             cache : rnn predictor cache[0] == state_m
                     cache[1] == state_c
         """
@@ -206,8 +203,6 @@ class RNNPredictor(PredictorBase):
         out, (m, c) = self.rnn(embed, (state_m, state_c))
 
         out = self.projection(out)
-        m = ApplyPadding(m, padding.unsqueeze(0), state_m)
-        c = ApplyPadding(c, padding.unsqueeze(0), state_c)
 
         return (out, [m, c])
 
@@ -327,13 +322,11 @@ class EmbeddingPredictor(PredictorBase):
     def forward_step(
         self,
         input: torch.Tensor,
-        padding: torch.Tensor,
         cache: List[torch.Tensor],
     ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
         """forward step for inference
         Args:
             input (torch.Tensor): [batch_size, time_step=1]
-            padding (torch.Tensor): [batch_size,1], 1 is padding value
             cache: for embedding predictor, cache[0] == history
         """
         assert input.size(1) == 1
@@ -455,12 +448,11 @@ class ConvPredictor(PredictorBase):
         return out
 
     def forward_step(
-        self, input: torch.Tensor, padding: torch.Tensor, cache: List[torch.Tensor]
+        self, input: torch.Tensor, cache: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
         """forward step for inference
         Args:
             input (torch.Tensor): [batch_size, time_step=1]
-            padding (torch.Tensor): [batch_size,1], 1 is padding value
             cache: for embedding predictor, cache[0] == history
         """
         assert input.size(1) == 1

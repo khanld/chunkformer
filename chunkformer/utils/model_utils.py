@@ -161,16 +161,17 @@ def milliseconds_to_hhmmssms(milliseconds):
     return f"{hours:02}:{minutes:02}:{seconds:02}:{remaining_ms:03}"  # noqa: E231
 
 
-def get_output(hyps, char_dict):
+def get_output(hyps, char_dict, model_type):
     decodes = []
     for hyp in hyps:
-        hyp = remove_duplicates_and_blank(hyp)
-        decode = class2str(hyp, char_dict)
+        if model_type == "asr_model":
+            hyp = remove_duplicates_and_blank(hyp)
+        decode = class2str(hyp, char_dict).strip()
         decodes.append(decode)
     return decodes
 
 
-def get_output_with_timestamps(hyps, char_dict):
+def get_output_with_timestamps(hyps, char_dict, model_type):
     decodes = []
     max_silence = 20
     for tokens in hyps:  # cost O(input_batch_size | ccu)
@@ -181,8 +182,9 @@ def get_output_with_timestamps(hyps, char_dict):
         silence_cum = 0
         decode_per_time = []
         decode = []
-        for time_stamp, token in enumerate(tokens):
-            if token == 0:
+        for time_stamp in range(tokens.shape[0]):
+            blk_mask = tokens[time_stamp] == 0
+            if blk_mask.all():
                 silence_cum += 1
             else:
                 if (start == -1) and (end == -1):
@@ -191,13 +193,14 @@ def get_output_with_timestamps(hyps, char_dict):
                     else:
                         start = max(time_stamp - int(max_silence / 2), 0)
                 silence_cum = 0
-                decode_per_time.append(token)
+
+                decode_per_time.extend(tokens[time_stamp][~blk_mask].tolist())
 
             if (silence_cum == max_silence) and (start != -1):
                 end = time_stamp
                 prev_end = end
                 item = {
-                    "decode": class2str(remove_duplicates_and_blank(decode_per_time), char_dict),
+                    "decode": get_output([decode_per_time], char_dict, model_type)[0],
                     "start": milliseconds_to_hhmmssms(start * 8 * 10),
                     "end": milliseconds_to_hhmmssms(end * 8 * 10),
                 }
@@ -209,7 +212,7 @@ def get_output_with_timestamps(hyps, char_dict):
 
         if (start != -1) and (end == -1) and (len(decode_per_time) > 0):
             item = {
-                "decode": class2str(remove_duplicates_and_blank(decode_per_time), char_dict),
+                "decode": get_output([decode_per_time], char_dict, model_type)[0],
                 "start": milliseconds_to_hhmmssms(start * 8 * 10),
                 "end": milliseconds_to_hhmmssms(time_stamp * 8 * 10),
             }

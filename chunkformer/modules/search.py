@@ -21,13 +21,13 @@ from torch.nn.utils.rnn import pad_sequence
 
 from chunkformer.utils.common import add_sos_eos, log_add, mask_to_bias
 from chunkformer.utils.context_graph import ContextGraph, ContextState
-from chunkformer.utils.ctc_utils import remove_duplicates_and_blank
 from chunkformer.utils.mask import (
     make_pad_mask,
     mask_finished_preds,
     mask_finished_scores,
     subsequent_mask,
 )
+from chunkformer.utils.model_utils import remove_duplicates_and_blank
 
 
 class DecodeResult:

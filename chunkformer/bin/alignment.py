@@ -29,9 +29,9 @@ from torch.utils.data import DataLoader
 
 from chunkformer.dataset.dataset import Dataset
 from chunkformer.utils.common import get_subsample
-from chunkformer.utils.ctc_utils import force_align
 from chunkformer.utils.init_model import init_model
 from chunkformer.utils.init_tokenizer import init_tokenizer
+from chunkformer.utils.model_utils import force_align
 
 
 def generator_textgrid(maxtime, lines, output):
