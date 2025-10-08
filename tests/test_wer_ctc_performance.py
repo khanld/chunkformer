@@ -3,6 +3,8 @@ Test WER performance on ChunkFormer model using audio_list.tsv data.
 """
 
 import os
+import subprocess
+import tempfile
 from pathlib import Path
 
 import jiwer
@@ -234,6 +236,152 @@ class TestWERPerformance:
         print(f"Mismatch WER: {wer:.4f} ({wer*100:.2f}%)")  # noqa: E231
         # Both methods should have WER < 10%
         assert wer < 0.01, f"Mismatch decode WER {wer:.4f} exceeds 5%"  # noqa: E231
+
+    def test_command_line_batch_decode(self):
+        """Test command line interface for batch transcription with WER calculation."""
+        # Create a temporary TSV file with subset of test data
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as temp_file:
+            # Take first 3 samples for faster testing
+            test_data = self.test_data.copy()
+
+            # Prepare TSV content with required columns
+            temp_file.write("key\twav\ttxt\n")
+            for _, row in test_data.iterrows():
+                temp_file.write(f"{row['key']}\t{row['audio_path']}\t{row['txt']}\n")
+
+            temp_tsv_path = temp_file.name
+
+        try:
+            # Run chunkformer-decode command
+            cmd = [
+                "chunkformer-decode",
+                "--model_checkpoint",
+                self.model_name,
+                "--audio_list",
+                temp_tsv_path,
+                "--total_batch_duration",
+                "14400",
+                "--chunk_size",
+                "64",
+                "--left_context_size",
+                "128",
+                "--right_context_size",
+                "128",
+            ]
+
+            # Execute command and capture output
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=300  # 5 minute timeout
+            )
+
+            # Check if command executed successfully
+            assert (
+                result.returncode == 0
+            ), f"Command failed with return code {result.returncode}. stderr: {result.stderr}"
+
+            # Parse WER from output
+            output_lines = result.stdout.strip().split("\n")
+            wer_line = None
+            for line in output_lines:
+                if "Word Error Rate (WER):" in line:
+                    wer_line = line
+                    break
+
+            assert wer_line is not None, f"WER not found in output: {result.stdout}"
+
+            # Extract WER value
+            wer_str = wer_line.split("Word Error Rate (WER):")[1].strip()
+            wer_value = float(wer_str)
+
+            print("\nCommand Line Batch Decode Results:")
+            print(f"WER: {wer_value:.4f} ({wer_value*100:.2f}%)")  # noqa: E231
+
+            # Assert WER < 10%
+            assert (
+                wer_value < 0.10
+            ), f"Command line WER {wer_value:.4f} ({wer_value*100:.2f}%) exceeds 10% threshold"
+
+            # Verify the output TSV file was updated with predictions
+            updated_data = pd.read_csv(temp_tsv_path, sep="\t")
+            assert "decode" in updated_data.columns, "decode column not found in output file"
+
+        except subprocess.TimeoutExpired:
+            pytest.fail("Command line test timed out after 5 minutes")
+        except FileNotFoundError:
+            pytest.skip("chunkformer-decode command not found in PATH")
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_tsv_path):
+                os.unlink(temp_tsv_path)
+
+    def test_command_line_long_form_audio(self):
+        """Test command line interface for long-form audio transcription."""
+        # Use the first audio file for long-form testing
+        if len(self.test_data) == 0:
+            pytest.skip("No test audio files available")
+
+        test_audio_path = self.test_data.iloc[0]["audio_path"]
+
+        try:
+            # Run chunkformer-decode command for long-form audio
+            cmd = [
+                "chunkformer-decode",
+                "--model_checkpoint",
+                self.model_name,
+                "--long_form_audio",
+                test_audio_path,
+                "--total_batch_duration",
+                "14400",
+                "--chunk_size",
+                "64",
+                "--left_context_size",
+                "128",
+                "--right_context_size",
+                "128",
+            ]
+
+            # Execute command and capture output
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=120  # 2 minute timeout for single file
+            )
+
+            # Check if command executed successfully
+            assert (
+                result.returncode == 0
+            ), f"Command failed with return code {result.returncode}. stderr: {result.stderr}"
+
+            # Verify output contains transcription
+            output_lines = result.stdout.strip().split("\n")
+            assert len(output_lines) > 0, "No output generated"
+
+            # Just verify that the model produces text output (find transcription lines)
+            transcription_found = False
+            transcription_text = ""
+            for line in output_lines:
+                # Look for lines with timestamp format HH:MM:SS:mmm - HH:MM:SS:mmm: text
+                if " - " in line and ": " in line and not line.startswith("  "):
+                    # Check if line has time format (digits and colons)
+                    parts = line.split(": ", 1)
+                    if len(parts) == 2:
+                        timestamp_part = parts[0]
+                        text_part = parts[1].strip()
+                        if ":" in timestamp_part and text_part:
+                            transcription_found = True
+                            transcription_text = text_part
+                            break
+
+            assert transcription_found, f"No transcription text found in output: {result.stdout}"
+            assert len(transcription_text) > 0, "Transcription text is empty"
+
+            print("\nCommand Line Long-Form Audio Results:")
+            print("Output:\n")
+            for line in output_lines:
+                print(f"  {line}")
+
+        except subprocess.TimeoutExpired:
+            pytest.fail("Long-form audio command line test timed out after 2 minutes")
+        except FileNotFoundError:
+            pytest.skip("chunkformer-decode command not found in PATH")
 
 
 if __name__ == "__main__":

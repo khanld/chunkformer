@@ -1,14 +1,17 @@
 # ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription
 ---
+<style>
+img {
+ display: inline;
+}
+</style>
+[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
+[![Paper](https://img.shields.io/badge/Paper-ICASSP%202025-green)](https://arxiv.org/abs/2502.14673)
 
 This repository contains the implementation and supplementary materials for our ICASSP 2025 paper, **"ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription"**. The paper has been fully accepted by the reviewers with scores: **4/4/4**.
 
 [![Ranked #1: Speech Recognition on Common Voice Vi](https://img.shields.io/badge/Ranked%20%231%3A%20Speech%20Recognition%20on%20Common%20Voice%20Vi-%F0%9F%8F%86%20SOTA-blueviolet?style=for-the-badge&logo=paperswithcode&logoColor=white)](https://paperswithcode.com/sota/speech-recognition-on-common-voice-vi)
 [![Ranked #1: Speech Recognition on VIVOS](https://img.shields.io/badge/Ranked%20%231%3A%20Speech%20Recognition%20on%20VIVOS-%F0%9F%8F%86%20SOTA-blueviolet?style=for-the-badge&logo=paperswithcode&logoColor=white)](https://paperswithcode.com/sota/speech-recognition-on-vivos)
-
-- [`paper.pdf`](docs/paper.pdf): The ICASSP 2025 paper describing ChunkFormer.
-- [`reviews.pdf`](docs/chunkformer_reviews.pdf): Reviewers' feedback from the ICASSP review process.
-- [`rebuttal.pdf`](docs/rebuttal.pdf): Our rebuttal addressing reviewer concerns.
 
 ## Table of Contents
 - [Introduction](#introduction)
@@ -18,8 +21,9 @@ This repository contains the implementation and supplementary materials for our 
   - [Install from source](#option-2-install-from-source)
   - [Pretrained Models](#pretrained-models)
 - [Usage](#usage)
-  - [Python API Usage](#python-api-usage)
-  - [Command Line Usage](#command-line-usage)
+  - [Feature Extraction](#feature-extraction)
+  - [Python API Transcription](#python-api-transcription)
+  - [Command Line Transcription](#command-line-transcription)
 - [Training the Model](#training)
 - [Citation](#citation)
 - [Acknowledgments](#acknowledgments)
@@ -61,18 +65,44 @@ pip install -e .
 ### Pretrained Models
 | Language | Model |
 |----------|-------|
-| Vietnamese  | [khanhld/chunkformer-large-vie](https://huggingface.co/khanhld/chunkformer-large-vie) |
-| English   | [khanhld/chunkformer-large-en-libri-960h](https://huggingface.co/khanhld/chunkformer-large-en-libri-960h) |
-
+| Vietnamese  | [![Hugging Face](https://img.shields.io/badge/HuggingFace-chunkformer--rnnt--large--vie-orange?logo=huggingface)](https://huggingface.co/khanhld/chunkformer-rnnt-large-vie) |
+| Vietnamese  | [![Hugging Face](https://img.shields.io/badge/HuggingFace-chunkformer--ctc--large--vie-orange?logo=huggingface)](https://huggingface.co/khanhld/chunkformer-ctc-large-vie) |
+| English   | [![Hugging Face](https://img.shields.io/badge/HuggingFace-chunkformer--ctc--large--en--libri--960h-orange?logo=huggingface)](https://huggingface.co/khanhld/chunkformer-large-en-libri-960h) |
 <a name = "usage" ></a>
 ## Usage
 
-### Python API Usage
+### Feature Extraction
+```python
+from chunkformer import ChunkFormerModel
+import torch
+
+device = "cuda:0"
+
+# Load a pre-trained model from Hugging Face or local directory
+model = ChunkFormerModel.from_pretrained("khanhld/chunkformer-ctc-large-vie").to(device)
+x, x_len = model._load_audio_and_extract_features("path/to/audio")  # x: (T, F), x_len: int
+x = x.unsqueeze(0).to(device)
+x_len = torch.tensor([x_len], device=device)
+
+# Extract feature
+feature, feature_len = model.encode(
+    xs=x,
+    xs_lens=x_len,
+    chunk_size=64,
+    left_context_size=128,
+    right_context_size=128,
+)
+
+print("feature: ", feature.shape)
+print("feature_len: ", feature_len)
+```
+
+### Python API Transcription
 ```python
 from chunkformer import ChunkFormerModel
 
-# Load a pre-trained model from Hugging Face or local directory
-model = ChunkFormerModel.from_pretrained("khanhld/chunkformer-large-vie")
+# Load a pre-trained encoder from Hugging Face or local directory
+model = ChunkFormerModel.from_pretrained("khanhld/chunkformer-ctc-large-vie")
 
 # For single long-form audio transcription
 transcription = model.endless_decode(
@@ -100,9 +130,7 @@ for i, transcription in enumerate(transcriptions):
 
 ```
 
-### Command Line Usage
-After installation, you can use the command line interface:
-
+### Command Line Transcription
 #### Long-Form Audio Testing
 To test the model with a single [long-form audio file](samples/audios/audio_1.wav). Audio file extensions ".mp3", ".wav", ".flac", ".m4a", ".aac" are accepted:
 ```bash

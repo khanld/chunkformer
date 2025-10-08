@@ -19,9 +19,11 @@ from tqdm import tqdm
 from transformers import PretrainedConfig, PreTrainedModel
 from transformers.utils import logging
 
+from chunkformer.transducer.search.greedy_search import batch_greedy_search, optimized_search
 from chunkformer.utils.checkpoint import load_checkpoint
-from chunkformer.utils.ctc_utils import get_output, get_output_with_timestamps
 from chunkformer.utils.file_utils import read_symbol_table
+from chunkformer.utils.init_model import init_speech_model
+from chunkformer.utils.model_utils import get_output, get_output_with_timestamps
 
 # Import ChunkFormer modules
 
@@ -35,99 +37,22 @@ class ChunkFormerConfig(PretrainedConfig):
 
     model_type = "chunkformer"
 
-    def __init__(
-        self,
-        vocab_size: int = 4992,
-        input_dim: int = 80,
-        output_size: int = 256,
-        attention_heads: int = 4,
-        linear_units: int = 2048,
-        num_blocks: int = 12,
-        dropout_rate: float = 0.1,
-        positional_dropout_rate: float = 0.1,
-        attention_dropout_rate: float = 0.1,
-        activation_type: str = "swish",
-        use_cnn_module: bool = True,
-        cnn_module_kernel: int = 15,
-        chunk_size: int = 64,
-        left_context_size: int = 128,
-        right_context_size: int = 128,
-        dynamic_chunk_sizes: Optional[list] = None,
-        dynamic_left_context_sizes: Optional[list] = None,
-        dynamic_right_context_sizes: Optional[list] = None,
-        ctc_weight: float = 0.3,
-        cmvn_file: Optional[str] = None,
-        is_json_cmvn: bool = True,
-        **kwargs,
-    ):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        self.vocab_size = vocab_size
-        self.input_dim = input_dim
-        self.output_size = output_size
-        self.attention_heads = attention_heads
-        self.linear_units = linear_units
-        self.num_blocks = num_blocks
-        self.dropout_rate = dropout_rate
-        self.positional_dropout_rate = positional_dropout_rate
-        self.attention_dropout_rate = attention_dropout_rate
-        self.activation_type = activation_type
-        self.use_cnn_module = use_cnn_module
-        self.cnn_module_kernel = cnn_module_kernel
-        self.chunk_size = chunk_size
-        self.left_context_size = left_context_size
-        self.right_context_size = right_context_size
-        self.dynamic_chunk_sizes = dynamic_chunk_sizes or [-1, -1, 64, 128, 256]
-        self.dynamic_left_context_sizes = dynamic_left_context_sizes or [64, 128, 256]
-        self.dynamic_right_context_sizes = dynamic_right_context_sizes or [64, 128, 256]
-        self.ctc_weight = ctc_weight
-        self.cmvn_file = cmvn_file
-        self.is_json_cmvn = is_json_cmvn
+        # set default decoder_conf and model_conf to {} if not exist
+        if "decoder_conf" not in self.__dict__:
+            self.decoder_conf = {}
+        if "model_conf" not in self.__dict__:
+            self.model_conf = {}
+        if "model" not in self.__dict__:
+            self.model = "asr_model"
 
     @classmethod
-    def from_yaml_config(cls, yaml_path: str, **kwargs):
-        """Create config from original ChunkFormer YAML config file."""
-        with open(yaml_path, "r") as f:
-            yaml_config = yaml.load(f, Loader=yaml.FullLoader)
-
-        # Map YAML config to our config
-        config_dict = {
-            "vocab_size": yaml_config.get("output_dim", 4992),
-            "input_dim": yaml_config.get("input_dim", 80),
-            "cmvn_file": yaml_config.get("cmvn_file"),
-            "is_json_cmvn": yaml_config.get("is_json_cmvn", True),
-        }
-
-        # Extract encoder config
-        encoder_conf = yaml_config.get("encoder_conf", {})
-        config_dict.update(
-            {
-                "output_size": encoder_conf.get("output_size", 256),
-                "attention_heads": encoder_conf.get("attention_heads", 4),
-                "linear_units": encoder_conf.get("linear_units", 2048),
-                "num_blocks": encoder_conf.get("num_blocks", 12),
-                "dropout_rate": encoder_conf.get("dropout_rate", 0.1),
-                "positional_dropout_rate": encoder_conf.get("positional_dropout_rate", 0.1),
-                "attention_dropout_rate": encoder_conf.get("attention_dropout_rate", 0.1),
-                "activation_type": encoder_conf.get("activation_type", "swish"),
-                "use_cnn_module": encoder_conf.get("use_cnn_module", True),
-                "cnn_module_kernel": encoder_conf.get("cnn_module_kernel", 15),
-                "dynamic_chunk_sizes": encoder_conf.get("dynamic_chunk_sizes"),
-                "dynamic_left_context_sizes": encoder_conf.get("dynamic_left_context_sizes"),
-                "dynamic_right_context_sizes": encoder_conf.get("dynamic_right_context_sizes"),
-            }
-        )
-
-        # Extract model config
-        model_conf = yaml_config.get("model_conf", {})
-        config_dict.update(
-            {
-                "ctc_weight": model_conf.get("ctc_weight", 0.3),
-            }
-        )
-
-        config_dict.update(kwargs)
-        return cls(**config_dict)
+    def from_dict(cls, config_dict: dict, **kwargs):
+        """Create config from dictionary."""
+        config = cls(**kwargs)
+        config.__dict__.update(config_dict)
+        return config
 
 
 class ChunkFormerModel(PreTrainedModel):
@@ -137,92 +62,50 @@ class ChunkFormerModel(PreTrainedModel):
 
     config_class = ChunkFormerConfig  # type: ignore[assignment]
     base_model_prefix = "chunkformer"
-    main_input_name = "features"
+    main_input_name = "xs"
     supports_gradient_checkpointing = True
 
-    def __init__(self, config: ChunkFormerConfig):
+    def __init__(self, config):
+        if isinstance(config, dict):
+            # Convert dict to ChunkFormerConfig
+            config = ChunkFormerConfig.from_dict(config)
+
         super().__init__(config)
         self.config = config
 
         # Initialize the model components directly (avoiding file path dependencies)
         self.model = self._init_model_from_config()
-
-        # Store vocabulary
-        self.vocab_size = config.vocab_size
         self.char_dict = None  # Will be set when loading symbol table
 
         # Post-init
         self.post_init()
 
     def _init_model_from_config(self):
-        """Initialize model from config without file dependencies."""
-        from chunkformer.modules.asr_model import ASRModel
-        from chunkformer.modules.cmvn import GlobalCMVN
-        from chunkformer.modules.ctc import CTC
-        from chunkformer.modules.encoder import ChunkFormerEncoder
-        from chunkformer.utils.cmvn import load_cmvn
+        """Initialize model from config."""
+        # Convert config to dict for init_speech_model compatibility
+        config_dict = self.config.__dict__.copy()
 
-        # Handle CMVN
-        global_cmvn = None
-        if self.config.cmvn_file and os.path.exists(self.config.cmvn_file):
-            try:
-                mean, istd = load_cmvn(self.config.cmvn_file, self.config.is_json_cmvn)
-                global_cmvn = GlobalCMVN(
-                    torch.from_numpy(mean).float(), torch.from_numpy(istd).float()
-                )
-                print(f"Loaded CMVN from {self.config.cmvn_file}")
-            except Exception as e:
-                print(f"Warning: Failed to load CMVN from {self.config.cmvn_file}: {e}")
-                global_cmvn = None
+        # Handle CMVN configuration if file path exists
+        if (
+            hasattr(self.config, "cmvn_file")
+            and self.config.cmvn_file
+            and os.path.exists(self.config.cmvn_file)
+        ):
+            config_dict["cmvn"] = "global_cmvn"
+            if "cmvn_conf" not in config_dict:
+                config_dict["cmvn_conf"] = {}
+            config_dict["cmvn_conf"]["cmvn_file"] = self.config.cmvn_file
+            config_dict["cmvn_conf"]["is_json_cmvn"] = getattr(self.config, "is_json_cmvn", True)
 
-        input_dim = self.config.input_dim
-        vocab_size = self.config.vocab_size
-
-        # Get encoder config
-        encoder_conf = {
-            "output_size": self.config.output_size,
-            "attention_heads": self.config.attention_heads,
-            "linear_units": self.config.linear_units,
-            "num_blocks": self.config.num_blocks,
-            "dropout_rate": self.config.dropout_rate,
-            "positional_dropout_rate": self.config.positional_dropout_rate,
-            "attention_dropout_rate": self.config.attention_dropout_rate,
-            "input_layer": "dw_striding",
-            "pos_enc_layer_type": "chunk_rel_pos",
-            "normalize_before": True,
-            "selfattention_layer_type": "chunk_rel_seflattn",
-            "activation_type": self.config.activation_type,
-            "use_cnn_module": self.config.use_cnn_module,
-            "cnn_module_kernel": self.config.cnn_module_kernel,
-            "cnn_module_norm": "layer_norm",
-            "dynamic_conv": True,
-            "layer_norm_type": "layer_norm",
-            "gradient_checkpointing": False,
-            "final_norm": True,
-            "norm_eps": 1e-5,
-            "use_sdpa": False,
-            "dynamic_chunk_sizes": self.config.dynamic_chunk_sizes,
-            "dynamic_left_context_sizes": self.config.dynamic_left_context_sizes,
-            "dynamic_right_context_sizes": self.config.dynamic_right_context_sizes,
-        }
-
-        # Initialize encoder
-        encoder = ChunkFormerEncoder(input_dim, global_cmvn=global_cmvn, **encoder_conf)
-
-        # Initialize CTC
-        ctc = CTC(vocab_size, encoder._output_size)
-
-        # Initialize full model
-        model = ASRModel(vocab_size=vocab_size, encoder=encoder, ctc=ctc, decoder=None)
-
+        # Initialize model using init_speech_model with original YAML structure
+        model, _ = init_speech_model(args=None, configs=config_dict)
         return model
 
     @classmethod
     def from_pretrained(
         cls,
         pretrained_model_name_or_path: str,
-        *model_args,
-        config: Optional[ChunkFormerConfig] = None,
+        config: Optional[dict] = None,
         cache_dir: Optional[str] = None,
         force_download: bool = False,
         **kwargs,
@@ -262,22 +145,25 @@ class ChunkFormerModel(PreTrainedModel):
             # Try config.yaml first (original ChunkFormer format)
             config_path = os.path.join(pretrained_model_name_or_path, "config.yaml")
             if os.path.exists(config_path):
-                config = ChunkFormerConfig.from_yaml_config(config_path)
+                with open(config_path, "r") as f:
+                    config_dict = yaml.load(f, Loader=yaml.FullLoader)
+
                 cmvn_path = os.path.join(pretrained_model_name_or_path, "global_cmvn")
                 if os.path.exists(cmvn_path):
-                    config.cmvn_file = cmvn_path
+                    config_dict["cmvn_file"] = cmvn_path
                 else:
                     logger.warning(
-                        f"CMVN file {config.cmvn_file} not found in {pretrained_model_name_or_path}"
+                        f"CMVN file {cmvn_path} not found in {pretrained_model_name_or_path}"
                     )
-                    config.cmvn_file = None
+                    config_dict["cmvn_file"] = None
+
+                # Convert dict to ChunkFormerConfig
+                config = ChunkFormerConfig.from_dict(config_dict)
             else:
-                # Try to load from config.json (HuggingFace format)
-                config_json_path = os.path.join(pretrained_model_name_or_path, "config.json")
-                if os.path.exists(config_json_path):
-                    config = ChunkFormerConfig.from_json_file(config_json_path)
-                else:
-                    raise ValueError(f"No config found in {pretrained_model_name_or_path}")
+                raise ValueError(f"No config found in {pretrained_model_name_or_path}")
+        elif isinstance(config, dict):
+            # Convert dict to ChunkFormerConfig if needed
+            config = ChunkFormerConfig.from_dict(config)
 
         # Initialize model
         model = cls(config)
@@ -326,70 +212,17 @@ class ChunkFormerModel(PreTrainedModel):
 
     def forward(
         self,
-        features: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        chunk_size: Optional[int] = None,
-        left_context_size: Optional[int] = None,
-        right_context_size: Optional[int] = None,
         **kwargs,
     ):
         """
-        Forward pass of the model.
-
-        Args:
-            features: Input features of shape (batch_size, seq_len, feature_dim) or list of tensors
-            attention_mask: Attention mask
-            chunk_size: Chunk size for chunked attention
-            left_context_size: Left context size
-            right_context_size: Right context size
+        Forward method is not implemented for ChunkFormer.
+        Use specific methods instead based on your use case.
         """
-        # Handle both tensor and list inputs
-        if isinstance(features, torch.Tensor):
-            batch_size, seq_len, _ = features.shape
-            xs = [features[i] for i in range(batch_size)]
-
-            # Create lengths tensor if not provided via attention_mask
-            if attention_mask is not None:
-                feature_lengths = attention_mask.sum(dim=1)
-            else:
-                feature_lengths = torch.full(
-                    (batch_size,), seq_len, dtype=torch.long, device=features.device
-                )
-        else:
-            # features is a list of tensors
-            xs = features
-            feature_lengths = torch.tensor(
-                [x.shape[0] for x in xs], dtype=torch.long, device=xs[0].device
-            )
-
-        # Use default chunk sizes if not provided
-        chunk_size = chunk_size or self.config.chunk_size
-        left_context_size = left_context_size or self.config.left_context_size
-        right_context_size = right_context_size or self.config.right_context_size
-
-        # Initialize cache and offset
-        device = xs[0].device
-        offset = torch.zeros(len(xs), dtype=torch.int, device=device)
-
-        # Forward through the encoder using forward_parallel_chunk
-        encoder_out, encoder_lens, n_chunks, _, _, _ = self.model.encoder.forward_parallel_chunk(
-            xs=xs,
-            xs_origin_lens=feature_lengths,
-            chunk_size=chunk_size,
-            left_context_size=left_context_size,
-            right_context_size=right_context_size,
-            offset=offset,
+        raise NotImplementedError(
+            "Forward method is not implemented. If you want to use ChunkFormer for feature "
+            "extraction from pretrained model please use 'chunkformer.encode()' instead. "
+            "Or if you want transcription please use 'endless_decode' or 'batch_decode'."
         )
-
-        # Get CTC outputs using our wrapper method
-        ctc_logits = self.model.ctc.log_softmax(encoder_out)
-
-        return {
-            "logits": ctc_logits,
-            "encoder_outputs": encoder_out,
-            "encoder_lengths": encoder_lens,
-            "n_chunks": n_chunks,
-        }
 
     def get_encoder(self):
         """Get the encoder module."""
@@ -401,34 +234,67 @@ class ChunkFormerModel(PreTrainedModel):
 
     def encode(
         self,
-        features: Union[torch.Tensor, list],
-        feature_lengths: torch.Tensor,
+        xs: torch.Tensor,
+        xs_lens: torch.Tensor,
         chunk_size: Optional[int] = None,
         left_context_size: Optional[int] = None,
         right_context_size: Optional[int] = None,
+        **kwargs,
     ):
-        """Encode features using the encoder with forward_parallel_chunk."""
-        chunk_size = chunk_size or self.config.chunk_size
-        left_context_size = left_context_size or self.config.left_context_size
-        right_context_size = right_context_size or self.config.right_context_size
-
-        # Convert tensor to list if needed
-        if isinstance(features, torch.Tensor):
-            xs = [features[i] for i in range(features.shape[0])]
-        else:
-            xs = features
-
-        device = xs[0].device
-        offset = torch.zeros(len(xs), dtype=torch.int, device=device)
-
-        return self.model.encoder.forward_parallel_chunk(
+        xs, xs_masks = self.model.encoder.forward_encoder(
             xs=xs,
-            xs_origin_lens=feature_lengths,
+            xs_lens=xs_lens,
             chunk_size=chunk_size,
             left_context_size=left_context_size,
             right_context_size=right_context_size,
-            offset=offset,
+            **kwargs,
         )
+        xs_lens = xs_masks.squeeze(1).sum(-1)
+        return xs, xs_lens
+
+    def _load_audio_and_extract_features(self, audio_path: str):
+        """
+        Load audio file and extract fbank features using config parameters.
+
+        Args:
+            audio_path: Path to audio file
+
+        Returns:
+            torch.Tensor: Fbank features tensor
+        """
+        # Get config parameters with defaults
+        fbank_conf = getattr(self.config, "fbank_conf", {})
+        resample_conf = getattr(self.config, "resample_conf", {})
+
+        # Extract parameters with fallback defaults
+        sample_rate = resample_conf.get("resample_rate", 16000)
+        num_mel_bins = fbank_conf.get("num_mel_bins", 80)
+        frame_length = fbank_conf.get("frame_length", 25)
+        frame_shift = fbank_conf.get("frame_shift", 10)
+        dither = 0.0
+
+        # Load audio
+        audio = AudioSegment.from_file(audio_path)
+        audio = audio.set_frame_rate(sample_rate)
+        audio = audio.set_sample_width(2)  # set bit depth to 16bit
+        audio = audio.set_channels(1)  # set to mono
+        waveform = torch.as_tensor(
+            audio.get_array_of_samples(), dtype=torch.float32, device=self.device
+        ).unsqueeze(0)
+
+        # Extract fbank features
+        x = kaldi.fbank(
+            waveform,
+            num_mel_bins=num_mel_bins,
+            frame_length=frame_length,
+            frame_shift=frame_shift,
+            dither=dither,
+            energy_floor=0.0,
+            sample_frequency=sample_rate,
+        )
+        x_len = x.shape[0]
+
+        return x, x_len
 
     @torch.no_grad()
     def endless_decode(
@@ -454,14 +320,6 @@ class ChunkFormerModel(PreTrainedModel):
 
         def get_max_input_context(c, r, n):
             return r + max(c, r) * (n - 1)
-
-        def load_audio(audio_path):
-            audio = AudioSegment.from_file(audio_path)
-            audio = audio.set_frame_rate(16000)
-            audio = audio.set_sample_width(2)  # set bit depth to 16bit
-            audio = audio.set_channels(1)  # set to mono
-            audio = torch.as_tensor(audio.get_array_of_samples(), dtype=torch.float32).unsqueeze(0)
-            return audio
 
         device = next(self.parameters()).device
 
@@ -489,22 +347,12 @@ class ChunkFormerModel(PreTrainedModel):
         )
         rel_right_context_size = rel_right_context_size * subsampling_factor
 
-        # Load and preprocess audio
-        waveform = load_audio(audio_path)
+        # Load audio and extract features using config parameters
+        xs, xs_len = self._load_audio_and_extract_features(audio_path)
+        xs = xs.unsqueeze(0)
         offset = torch.zeros(1, dtype=torch.int, device=device)
 
-        # Extract features
-        xs = kaldi.fbank(
-            waveform,
-            num_mel_bins=80,
-            frame_length=25,
-            frame_shift=10,
-            dither=0.0,
-            energy_floor=0.0,
-            sample_frequency=16000,
-        ).unsqueeze(0)
-
-        hyps = []
+        encoder_outs = []
         att_cache = torch.zeros(
             (
                 self.model.encoder.num_blocks,
@@ -518,17 +366,17 @@ class ChunkFormerModel(PreTrainedModel):
         ).to(device)
 
         for idx, _ in tqdm(
-            list(enumerate(range(0, xs.shape[1], truncated_context_size * subsampling_factor)))
+            list(enumerate(range(0, xs_len, truncated_context_size * subsampling_factor)))
         ):
             start = max(truncated_context_size * subsampling_factor * idx, 0)
-            end = min(truncated_context_size * subsampling_factor * (idx + 1) + 7, xs.shape[1])
+            end = min(truncated_context_size * subsampling_factor * (idx + 1) + 7, xs_len)
 
             x = xs[:, start : end + rel_right_context_size]
             x_len = torch.tensor([x[0].shape[0]], dtype=torch.int).to(device)
 
             (
-                encoder_outs,
-                encoder_lens,
+                encoder_out,
+                encoder_len,
                 _,
                 att_cache,
                 cnn_cache,
@@ -545,39 +393,45 @@ class ChunkFormerModel(PreTrainedModel):
                 offset=offset,
             )
 
-            encoder_outs = encoder_outs.reshape(1, -1, encoder_outs.shape[-1])[:, :encoder_lens]
-            if (
-                chunk_size * multiply_n * subsampling_factor * idx + rel_right_context_size
-                < xs.shape[1]
-            ):
-                encoder_outs = encoder_outs[
+            encoder_out = encoder_out.reshape(1, -1, encoder_out.shape[-1])[:, :encoder_len]
+            if chunk_size * multiply_n * subsampling_factor * idx + rel_right_context_size < xs_len:
+                encoder_out = encoder_out[
                     :, :truncated_context_size
                 ]  # exclude the output of rel right context
-            offset = offset - encoder_lens + encoder_outs.shape[1]
+            offset = offset - encoder_len + encoder_out.shape[1]
 
-            hyp = self.model.ctc.log_softmax(encoder_outs).squeeze(0)
-            hyps.append(hyp)
+            encoder_outs.append(encoder_out)
 
             if device.type == "cuda":
                 torch.cuda.empty_cache()
             if (
                 chunk_size * multiply_n * subsampling_factor * idx + rel_right_context_size
-                >= xs.shape[1]
+                >= xs_len
             ):
                 break
-
-        hyps = torch.cat(hyps)  # type: ignore[assignment]
-
-        if return_timestamps and self.char_dict is not None:
-            # Convert logits to token predictions
-            token_predictions = torch.argmax(hyps, dim=-1)
-            decode_result = get_output_with_timestamps([token_predictions], self.char_dict)[0]
-        elif self.char_dict is not None:
-            # Convert logits to token predictions
-            token_predictions = torch.argmax(hyps, dim=-1)
-            decode_result = get_output([token_predictions], self.char_dict)[0]
+        encoder_outs = torch.cat(encoder_outs, dim=1)  # [1, T, F]  # type: ignore[assignment]
+        if self.config.model == "asr_model":
+            token_predictions = self.model.ctc.log_softmax(encoder_outs).squeeze(0)  # [1, T, V]
+            token_predictions = torch.argmax(token_predictions, dim=-1).reshape(1, -1, 1)
         else:
-            decode_result = hyps
+            encoder_len = torch.tensor(
+                [encoder_outs.shape[1]], device=encoder_outs.device  # type: ignore[attr-defined]
+            )
+            token_predictions = optimized_search(
+                self.model, encoder_out=encoder_outs, encoder_out_lens=encoder_len
+            )
+            token_predictions = token_predictions.reshape(
+                1, encoder_outs.size(1), -1  # type: ignore[attr-defined]
+            )
+
+        if self.char_dict is not None:
+            decode_result = get_output_with_timestamps(
+                token_predictions, self.char_dict, self.config.model
+            )[0]
+            if not return_timestamps:
+                decode_result = " ".join([item["decode"] for item in decode_result]).strip()
+        else:
+            decode_result = token_predictions
 
         return decode_result
 
@@ -601,14 +455,6 @@ class ChunkFormerModel(PreTrainedModel):
             total_batch_duration: Total duration in seconds for batch processing
         """
 
-        def load_audio(audio_path):
-            audio = AudioSegment.from_file(audio_path)
-            audio = audio.set_frame_rate(16000)
-            audio = audio.set_sample_width(2)  # set bit depth to 16bit
-            audio = audio.set_channels(1)  # set to mono
-            audio = torch.as_tensor(audio.get_array_of_samples(), dtype=torch.float32).unsqueeze(0)
-            return audio
-
         max_length_limited_context = total_batch_duration
         max_length_limited_context = (
             int((max_length_limited_context // 0.01)) // 2
@@ -625,19 +471,11 @@ class ChunkFormerModel(PreTrainedModel):
         xs_origin_lens = []
 
         for idx, audio_path in tqdm(enumerate(audio_paths)):
-            waveform = load_audio(audio_path)
-            x = kaldi.fbank(
-                waveform,
-                num_mel_bins=80,
-                frame_length=25,
-                frame_shift=10,
-                dither=0.0,
-                energy_floor=0.0,
-                sample_frequency=16000,
-            )
+            # Load audio and extract features using config parameters
+            x, x_len = self._load_audio_and_extract_features(audio_path)
 
             xs.append(x)
-            xs_origin_lens.append(x.shape[0])
+            xs_origin_lens.append(x_len)
             max_frames -= xs_origin_lens[-1]
 
             if (max_frames <= 0) or (idx == len(audio_paths) - 1):
@@ -661,26 +499,27 @@ class ChunkFormerModel(PreTrainedModel):
                     right_context_size=right_context_size,
                     offset=offset,
                 )
-
-                # Get CTC logits
-                ctc_logits = self.model.ctc.log_softmax(encoder_outs)
-                # Convert to token predictions for decoding
-                hyps = torch.argmax(ctc_logits, dim=-1)
-
-                if self.char_dict is not None:
-                    # Split by chunks if needed
-                    if n_chunks is not None and encoder_lens is not None:
-                        hyps_split = hyps.split(n_chunks, dim=0)
-                        hyps_list = [
-                            hyp.flatten()[:x_len] for hyp, x_len in zip(hyps_split, encoder_lens)
-                        ]
-                    else:
-                        hyps_list = [hyp for hyp in hyps]
-
-                    batch_decodes = get_output(hyps_list, self.char_dict)
-                    decodes.extend(batch_decodes)
+                if self.config.model == "asr_model":
+                    ctc_logits = self.model.ctc.log_softmax(encoder_outs)
+                    hyps = torch.argmax(ctc_logits, dim=-1)
+                    hyps = hyps.split(n_chunks, dim=0)
+                    hyps = [hyp.flatten()[:x_len] for hyp, x_len in zip(hyps, encoder_lens)]
+                    if self.char_dict is not None:
+                        hyps = get_output(hyps, self.char_dict, self.config.model)
                 else:
-                    decodes.extend([hyp for hyp in hyps])
+                    encoder_outs = encoder_outs.split(n_chunks, dim=0)
+                    encoder_outs = [
+                        enc_out.reshape(-1, enc_out.shape[-1])[:enc_len]
+                        for enc_out, enc_len in zip(encoder_outs, encoder_lens)
+                    ]
+                    encoder_outs = torch.nn.utils.rnn.pad_sequence(encoder_outs, batch_first=True)
+                    hyps = batch_greedy_search(
+                        self.model, encoder_out=encoder_outs, encoder_out_lens=encoder_lens
+                    )
+                    if self.char_dict is not None:
+                        hyps = get_output(hyps, self.char_dict, self.config.model)
+
+                decodes.extend(hyps)
 
                 # Reset
                 xs = []
