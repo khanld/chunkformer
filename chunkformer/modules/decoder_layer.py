@@ -18,7 +18,7 @@ from typing import Dict, Optional, Tuple
 import torch
 from torch import nn
 
-from chunkformer.utils.class_utils import WENET_NORM_CLASSES
+from chunkformer.utils.class_utils import CHUNKFORMER_NORM_CLASSES
 
 
 class DecoderLayer(nn.Module):
@@ -58,9 +58,9 @@ class DecoderLayer(nn.Module):
         self.src_attn = src_attn
         self.feed_forward = feed_forward
         assert layer_norm_type in ["layer_norm", "rms_norm"]
-        self.norm1 = WENET_NORM_CLASSES[layer_norm_type](size, eps=norm_eps)
-        self.norm2 = WENET_NORM_CLASSES[layer_norm_type](size, eps=norm_eps)
-        self.norm3 = WENET_NORM_CLASSES[layer_norm_type](size, eps=norm_eps)
+        self.norm1 = CHUNKFORMER_NORM_CLASSES[layer_norm_type](size, eps=norm_eps)
+        self.norm2 = CHUNKFORMER_NORM_CLASSES[layer_norm_type](size, eps=norm_eps)
+        self.norm3 = CHUNKFORMER_NORM_CLASSES[layer_norm_type](size, eps=norm_eps)
         self.dropout = nn.Dropout(dropout_rate)
         self.normalize_before = normalize_before
 

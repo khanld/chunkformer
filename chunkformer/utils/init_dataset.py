@@ -36,6 +36,6 @@ def init_dataset(
     if dataset_type == "asr":
         return init_asr_dataset(data_type, data_list_file, tokenizer, conf, partition)
     else:
-        from wenet.ssl.init_dataset import init_dataset as init_ssl_dataset
+        from chunkformer.ssl.init_dataset import init_dataset as init_ssl_dataset
 
         return init_ssl_dataset(data_type, data_list_file, conf, partition)

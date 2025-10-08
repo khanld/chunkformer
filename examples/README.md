@@ -39,10 +39,10 @@ For training RNN-T models with the k2 pruned loss, refer to this [PAGE](https://
 
 ### 1. Create Data Directory Structure
 
-First, create a `data/` directory in your training example folder (e.g., `examples/vietnamese/ctc/` or `examples/vietnamese/rnnt/`):
+First, create a `data/` directory in your training example folder (e.g., `examples/asr/ctc/` or `examples/asr/rnnt/`):
 
 ```bash
-cd examples/vietnamese/ctc  # or examples/vietnamese/rnnt
+cd examples/asr/ctc  # or examples/asr/rnnt
 mkdir -p data
 ```
 
@@ -51,7 +51,7 @@ mkdir -p data
 Your training directory must follow this structure:
 
 ```
-examples/vietnamese/ctc/  # or rnnt
+examples/asr/ctc/  # or rnnt
 ├── data/                       # MUST CREATE THIS FOLDER YOURSELF
 │   ├── train_set_name/         # Your training set folder
 │   │   └── data.tsv            # REQUIRED: Training data file
@@ -109,7 +109,7 @@ train_config=conf/v0.yaml   # Your model config file
 dir=exp/v0                 # Experiment output directory
 
 # To enable Mixed Precision training (default)
-wenet/bin/train.py \
+chunkformer/bin/train.py \
     --use_amp \
     ...
 ...

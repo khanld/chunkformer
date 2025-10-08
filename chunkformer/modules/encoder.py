@@ -26,7 +26,7 @@ from chunkformer.modules.embedding import RelPositionalEncodingWithRightContext
 from chunkformer.modules.encoder_layer import ChunkFormerEncoderLayer
 from chunkformer.modules.positionwise_feed_forward import PositionwiseFeedForward
 from chunkformer.modules.subsampling import DepthwiseConvSubsampling
-from chunkformer.utils.class_utils import WENET_ACTIVATION_CLASSES, WENET_NORM_CLASSES
+from chunkformer.utils.class_utils import CHUNKFORMER_ACTIVATION_CLASSES, CHUNKFORMER_NORM_CLASSES
 from chunkformer.utils.mask import make_pad_mask
 
 
@@ -114,7 +114,7 @@ class ChunkFormerEncoder(torch.nn.Module):
         assert layer_norm_type in ["layer_norm", "rms_norm"]
         self.normalize_before = normalize_before
         self.final_norm = final_norm
-        self.after_norm = WENET_NORM_CLASSES[layer_norm_type](output_size, eps=norm_eps)
+        self.after_norm = CHUNKFORMER_NORM_CLASSES[layer_norm_type](output_size, eps=norm_eps)
         self.static_chunk_size = static_chunk_size
         self.use_dynamic_chunk = use_dynamic_chunk
         self.use_dynamic_left_chunk = use_dynamic_left_chunk
@@ -125,7 +125,7 @@ class ChunkFormerEncoder(torch.nn.Module):
         self.dynamic_right_context_sizes = dynamic_right_context_sizes
 
         self.cnn_module_kernel = cnn_module_kernel
-        activation = WENET_ACTIVATION_CLASSES[activation_type]()
+        activation = CHUNKFORMER_ACTIVATION_CLASSES[activation_type]()
         self.num_blocks = num_blocks
         self.dynamic_conv = dynamic_conv
         self.input_size = input_size

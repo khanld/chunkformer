@@ -22,11 +22,11 @@ import torch.utils.checkpoint as ckpt
 
 from chunkformer.modules.decoder_layer import DecoderLayer
 from chunkformer.utils.class_utils import (
-    WENET_ACTIVATION_CLASSES,
-    WENET_ATTENTION_CLASSES,
-    WENET_EMB_CLASSES,
-    WENET_MLP_CLASSES,
-    WENET_NORM_CLASSES,
+    CHUNKFORMER_ACTIVATION_CLASSES,
+    CHUNKFORMER_ATTENTION_CLASSES,
+    CHUNKFORMER_EMB_CLASSES,
+    CHUNKFORMER_MLP_CLASSES,
+    CHUNKFORMER_NORM_CLASSES,
 )
 from chunkformer.utils.common import mask_to_bias
 from chunkformer.utils.mask import make_pad_mask, subsequent_mask
@@ -96,7 +96,7 @@ class TransformerDecoder(torch.nn.Module):
     ):
         super().__init__()
         attention_dim = encoder_output_size
-        activation = WENET_ACTIVATION_CLASSES[activation_type]()
+        activation = CHUNKFORMER_ACTIVATION_CLASSES[activation_type]()
 
         self.embed = torch.nn.Sequential(
             (
@@ -104,12 +104,12 @@ class TransformerDecoder(torch.nn.Module):
                 if input_layer == "no_pos"
                 else torch.nn.Embedding(vocab_size, attention_dim)
             ),
-            WENET_EMB_CLASSES[input_layer](attention_dim, positional_dropout_rate),
+            CHUNKFORMER_EMB_CLASSES[input_layer](attention_dim, positional_dropout_rate),
         )
 
         assert layer_norm_type in ["layer_norm", "rms_norm"]
         self.normalize_before = normalize_before
-        self.after_norm = WENET_NORM_CLASSES[layer_norm_type](attention_dim, eps=norm_eps)
+        self.after_norm = CHUNKFORMER_NORM_CLASSES[layer_norm_type](attention_dim, eps=norm_eps)
         self.use_output_layer = use_output_layer
         if use_output_layer:
             self.output_layer = torch.nn.Linear(attention_dim, vocab_size)
@@ -117,12 +117,12 @@ class TransformerDecoder(torch.nn.Module):
             self.output_layer = torch.nn.Identity()
         self.num_blocks = num_blocks
 
-        mlp_class = WENET_MLP_CLASSES[mlp_type]
+        mlp_class = CHUNKFORMER_MLP_CLASSES[mlp_type]
         self.decoders = torch.nn.ModuleList(
             [
                 DecoderLayer(
                     attention_dim,
-                    WENET_ATTENTION_CLASSES["selfattn"](
+                    CHUNKFORMER_ATTENTION_CLASSES["selfattn"](
                         attention_heads,
                         attention_dim,
                         self_attention_dropout_rate,
@@ -134,7 +134,7 @@ class TransformerDecoder(torch.nn.Module):
                         head_dim,
                     ),
                     (
-                        WENET_ATTENTION_CLASSES["crossattn"](
+                        CHUNKFORMER_ATTENTION_CLASSES["crossattn"](
                             attention_heads,
                             attention_dim,
                             src_attention_dropout_rate,

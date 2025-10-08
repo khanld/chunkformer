@@ -10,7 +10,7 @@ from chunkformer.modules.norm import RMSNorm
 from chunkformer.modules.positionwise_feed_forward import PositionwiseFeedForward
 from chunkformer.modules.swish import Swish
 
-WENET_ACTIVATION_CLASSES = {
+CHUNKFORMER_ACTIVATION_CLASSES = {
     "hardtanh": torch.nn.Hardtanh,
     "tanh": torch.nn.Tanh,
     "relu": torch.nn.ReLU,
@@ -19,22 +19,25 @@ WENET_ACTIVATION_CLASSES = {
     "gelu": torch.nn.GELU,
 }
 
-WENET_RNN_CLASSES = {
+CHUNKFORMER_RNN_CLASSES = {
     "rnn": torch.nn.RNN,
     "lstm": torch.nn.LSTM,
     "gru": torch.nn.GRU,
 }
 
 
-WENET_NORM_CLASSES = {"layer_norm": LayerNorm, "batch_norm": BatchNorm1d, "rms_norm": RMSNorm}
+CHUNKFORMER_NORM_CLASSES = {"layer_norm": LayerNorm, "batch_norm": BatchNorm1d, "rms_norm": RMSNorm}
 
-WENET_ATTENTION_CLASSES = {"selfattn": MultiHeadedAttention, "crossattn": MultiHeadedCrossAttention}
+CHUNKFORMER_ATTENTION_CLASSES = {
+    "selfattn": MultiHeadedAttention,
+    "crossattn": MultiHeadedCrossAttention,
+}
 
-WENET_EMB_CLASSES = {
+CHUNKFORMER_EMB_CLASSES = {
     "embed": PositionalEncoding,
     "abs_pos": PositionalEncoding,
 }
 
-WENET_MLP_CLASSES = {
+CHUNKFORMER_MLP_CLASSES = {
     "position_wise_feed_forward": PositionwiseFeedForward,
 }

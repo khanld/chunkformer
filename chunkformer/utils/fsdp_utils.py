@@ -9,11 +9,11 @@ from torch.distributed.fsdp.wrap import lambda_auto_wrap_policy, transformer_aut
 from chunkformer.modules.decoder_layer import DecoderLayer
 from chunkformer.modules.encoder_layer import ChunkFormerEncoderLayer
 from chunkformer.utils.checkpoint import save_state_dict_and_infos
-from chunkformer.utils.init_model import WENET_DECODER_CLASSES, WENET_ENCODER_CLASSES
+from chunkformer.utils.init_model import CHUNKFORMER_DECODER_CLASSES, CHUNKFORMER_ENCODER_CLASSES
 
-WENET_ENCODER_LAYERS_CLASSES = {"chunkformer_encoder_layer": ChunkFormerEncoderLayer}
+CHUNKFORMER_ENCODER_LAYERS_CLASSES = {"chunkformer_encoder_layer": ChunkFormerEncoderLayer}
 
-WENET_DECODER_LAYERS_CLASSES = {
+CHUNKFORMER_DECODER_LAYERS_CLASSES = {
     "transformer_decoder_layer": DecoderLayer,
     # TODO(Mddct):
     #     1 wrap transducer's predictor and joint
@@ -36,14 +36,15 @@ def wenet_fsdp_wrap_policy(mode):
                 lambda_auto_wrap_policy,
                 lambda_fn=lambda module: isinstance(
                     module,
-                    tuple(WENET_ENCODER_CLASSES.values()) + tuple(WENET_DECODER_CLASSES.values()),
+                    tuple(CHUNKFORMER_ENCODER_CLASSES.values())
+                    + tuple(CHUNKFORMER_DECODER_CLASSES.values()),
                 ),
             )
             return enc_dec_wrap_policy
         else:
             to_wrap_class = set()
-            to_wrap_class.update(set(WENET_ENCODER_LAYERS_CLASSES.values()))
-            to_wrap_class.update(set(WENET_DECODER_LAYERS_CLASSES.values()))
+            to_wrap_class.update(set(CHUNKFORMER_ENCODER_LAYERS_CLASSES.values()))
+            to_wrap_class.update(set(CHUNKFORMER_DECODER_LAYERS_CLASSES.values()))
             layers_wrap_policy = partial(
                 transformer_auto_wrap_policy, transformer_layer_cls=to_wrap_class
             )
@@ -70,11 +71,11 @@ def check_gradient_checkpoint(model):
     if hasattr(model, "encoder") and hasattr(model.encoder, "gradient_checkpointing"):
         if model.encoder.gradient_checkpointing:
             model.encoder.gradient_checkpointing = False
-            ckpt_laye_types += list(WENET_ENCODER_LAYERS_CLASSES.values())
+            ckpt_laye_types += list(CHUNKFORMER_ENCODER_LAYERS_CLASSES.values())
     if hasattr(model, "decoder") and hasattr(model.decoder, "gradient_checkpointing"):
         if model.decoder.gradient_checkpointing:
             model.decoder.gradient_checkpointing = False
-            ckpt_laye_types += list(WENET_DECODER_LAYERS_CLASSES.values())
+            ckpt_laye_types += list(CHUNKFORMER_DECODER_LAYERS_CLASSES.values())
     return tuple(ckpt_laye_types)
 
 

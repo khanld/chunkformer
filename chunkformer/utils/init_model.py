@@ -55,13 +55,6 @@ CHUNKFORMER_MODEL_CLASSES = {
     "transducer": Transducer,
 }
 
-WENET_DECODER_CLASSES = {
-    "transformer": TransformerDecoder,
-    "bitransformer": BiTransformerDecoder,
-}
-
-WENET_ENCODER_CLASSES = {"chunkformer": ChunkFormerEncoder}
-
 
 def init_speech_model(args, configs):
     # Load global CMVN if specified

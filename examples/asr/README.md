@@ -53,7 +53,7 @@ This document contains evaluation results for ChunkFormer models across differen
 
 #### Model Configuration
 - **Training Dataset**: LibriSpeech 100h
-- **Configuration File**: `examples/asr/ctc/conf/chunkformer-rnnt-small-libri-100h.yaml`
+- **Configuration File**: `examples/asr/rnnt/conf/chunkformer-rnnt-small-libri-100h.yaml`
 - **Checkpoint**: [![Hugging Face](https://img.shields.io/badge/HuggingFace-chunkformer--rnnt--small--libri--100h-orange?logo=huggingface)](https://huggingface.co/khanhld/chunkformer-rnnt-small-libri-100h)
 - **Hardware**: 2 GPUs
 - **Search Algorithm**: Greedy Search

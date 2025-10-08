@@ -361,7 +361,7 @@ class TarsDataPipe(IterDataPipe):
         self.dp = dataset
 
     def __iter__(self):
-        from wenet.dataset.processor import AUDIO_FORMAT_SETS
+        from chunkformer.dataset.processor import AUDIO_FORMAT_SETS
 
         for sample in self.dp:
             assert "file_name" in sample

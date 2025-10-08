@@ -49,9 +49,7 @@ class PrefixBeamSearch:
         ctc_weight: float = 0.3,
         transducer_weight: float = 0.7,
     ):
-        """prefix beam search
-        also see wenet.transducer.transducer.beam_search
-        """
+        """prefix beam search"""
         assert speech.shape[0] == speech_lengths.shape[0]
         assert decoding_chunk_size != 0
         device = speech.device

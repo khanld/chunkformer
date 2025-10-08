@@ -3,7 +3,7 @@ from typing import Optional
 import torch
 from torch import nn
 
-from chunkformer.utils.class_utils import WENET_ACTIVATION_CLASSES
+from chunkformer.utils.class_utils import CHUNKFORMER_ACTIVATION_CLASSES
 
 
 class TransducerJoint(torch.nn.Module):
@@ -26,7 +26,7 @@ class TransducerJoint(torch.nn.Module):
         assert joint_mode in ["add"]
         super().__init__()
 
-        self.activatoin = WENET_ACTIVATION_CLASSES[activation]()
+        self.activatoin = CHUNKFORMER_ACTIVATION_CLASSES[activation]()
         self.prejoin_linear = prejoin_linear
         self.postjoin_linear = postjoin_linear
         self.joint_mode = joint_mode
@@ -61,7 +61,7 @@ class TransducerJoint(torch.nn.Module):
                 torch.nn.LogSigmoid(),
             )
             self.token_pred = torch.nn.Sequential(
-                WENET_ACTIVATION_CLASSES[hat_activation](),
+                CHUNKFORMER_ACTIVATION_CLASSES[hat_activation](),
                 torch.nn.Dropout(dropout_rate),
                 torch.nn.Linear(join_dim, self.vocab_size - 1),
             )
