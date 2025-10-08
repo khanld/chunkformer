@@ -20,7 +20,7 @@ class TestWERPerformance:
     @classmethod
     def setup_class(cls):
         """Set up test fixtures."""
-        cls.model_name = "khanhld/chunkformer-large-vie"
+        cls.model_name = "khanhld/chunkformer-ctc-large-vie"
         cls.model = ChunkFormerModel.from_pretrained(cls.model_name)
         cls.data_dir = Path(__file__).parent.parent
         cls.audio_list_path = cls.data_dir / "samples/data.tsv"
