@@ -10,12 +10,13 @@ authors = [
 ]
 description = "ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription"
 readme = "README.md"
+license = {text = "CC-BY-4.0"}
 requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: Other/Proprietary License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
