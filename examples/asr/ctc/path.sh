@@ -1,5 +1,5 @@
-export WENET_DIR=$PWD/../../..
-export BUILD_DIR=${WENET_DIR}/runtime/libtorch/build
+export CHUNKFORMER_DIR=$PWD/../../..
+export BUILD_DIR=${CHUNKFORMER_DIR}/runtime/libtorch/build
 export OPENFST_BIN=${BUILD_DIR}/../fc_base/openfst-build/src
 export PATH=$PWD:${BUILD_DIR}/bin:${BUILD_DIR}/kaldi:${OPENFST_BIN}/bin:$PATH
 
