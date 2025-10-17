@@ -66,6 +66,7 @@ class ChunkFormerEncoder(torch.nn.Module):
         dynamic_chunk_sizes: Optional[List] = None,
         dynamic_left_context_sizes: Optional[List] = None,
         dynamic_right_context_sizes: Optional[List] = None,
+        streaming: bool = False,
         **kwargs,
     ):
         """Construct ChunkFormerEncoder
@@ -96,6 +97,7 @@ class ChunkFormerEncoder(torch.nn.Module):
 
         self._output_size = output_size
         self.global_cmvn = global_cmvn
+        self.streaming = streaming
 
         self.normalize_before = normalize_before
         self.final_norm = final_norm
@@ -202,7 +204,13 @@ class ChunkFormerEncoder(torch.nn.Module):
         ):
             chunk_size = random.choice(self.dynamic_chunk_sizes)
             left_context_size = random.choice(self.dynamic_left_context_sizes)
-            right_context_size = random.choice(self.dynamic_right_context_sizes)
+            if not self.streaming:
+                right_context_size = random.choice(self.dynamic_right_context_sizes)
+            else:
+                # only choose right context size <= chunk_size / 2
+                right_context_size = random.choice(
+                    [r for r in self.dynamic_right_context_sizes if r <= chunk_size // 2]
+                )
             full_context_training = not (
                 chunk_size > 0 and left_context_size > 0 and right_context_size > 0
             )
