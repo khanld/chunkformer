@@ -211,9 +211,7 @@ class ChunkFormerEncoder(torch.nn.Module):
                 right_context_size = random.choice(
                     [r for r in self.dynamic_right_context_sizes if r <= chunk_size // 2]
                 )
-            full_context_training = not (
-                chunk_size > 0 and left_context_size > 0 and right_context_size > 0
-            )
+            full_context_training = not (chunk_size > 0)
 
         if full_context_training:
             chunk_size, left_context_size, right_context_size = 0, 0, 0

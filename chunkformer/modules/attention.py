@@ -244,7 +244,7 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
         left and right context.
 
         Args:
-            x: Input tensor (batch, head, time1, 2*time1-1+left_context_size).
+            x: Input tensor (batch, head, time1, 2*time1-1+left_context_size+right_context_size).
                 time1 means the length of query vector.
             left_context_size (int): Left context size for limited chunk context
             right_context_size (int): Right context size for limited chunk context
@@ -303,7 +303,7 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
         q, k, v = self.forward_qkv(query, key, value)
         q = q.transpose(1, 2)  # (batch, time1, head, d_k)
 
-        limited_context_attn = chunk_size > 0 and left_context_size > 0 and right_context_size > 0
+        limited_context_attn = chunk_size > 0
 
         # NOTE(xcsong):
         #   when export onnx model, for 1st chunk, we feed
