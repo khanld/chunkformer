@@ -207,9 +207,9 @@ class ChunkFormerEncoder(torch.nn.Module):
             if not self.streaming:
                 right_context_size = random.choice(self.dynamic_right_context_sizes)
             else:
-                # only choose right context size <= chunk_size / 2
+                # only choose right context size < chunk_size
                 right_context_size = random.choice(
-                    [r for r in self.dynamic_right_context_sizes if r <= chunk_size // 2]
+                    [r for r in self.dynamic_right_context_sizes if r < chunk_size]
                 )
             full_context_training = not (chunk_size > 0)
 
