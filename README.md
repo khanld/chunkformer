@@ -9,6 +9,8 @@ This repository contains the implementation and supplementary materials for our 
 [![Ranked #1: Speech Recognition on VIVOS](https://img.shields.io/badge/Ranked%20%231%3A%20Speech%20Recognition%20on%20VIVOS-%F0%9F%8F%86%20SOTA-blueviolet?style=for-the-badge&logo=paperswithcode&logoColor=white)](https://paperswithcode.com/sota/speech-recognition-on-vivos)
 
 ![](docs/demo.mp4)
+<video src="docs/demo.mp4"></video>
+
 
 ## Table of Contents
 - [Introduction](#introduction)
