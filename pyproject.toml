@@ -138,6 +138,10 @@ exclude = [
     "setup.py"
 ]
 
+[[tool.mypy.overrides]]
+module = "streamlit.*"
+ignore_errors = true
+
 [tool.autopep8]
 max-line-length = 100
 aggressive = 2
