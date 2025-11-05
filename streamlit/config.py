@@ -25,6 +25,7 @@ CHUNK_SIZE = 64
 LEFT_CONTEXT_SIZE = 128
 RIGHT_CONTEXT_SIZE = 128
 TOTAL_BATCH_DURATION = 1800
+MAX_SILENCE_DURATION = 0.5  # Default max silence duration in seconds
 
 # Timeouts
 FFMPEG_TIMEOUT = 600  # 10 minutes

@@ -171,9 +171,9 @@ def get_output(hyps, char_dict, model_type):
     return decodes
 
 
-def get_output_with_timestamps(hyps, char_dict, model_type):
+def get_output_with_timestamps(hyps, char_dict, model_type, max_silence_duration):
     decodes = []
-    max_silence = 20
+    max_silence = max_silence_duration // 0.08  # 80ms per frame
     for tokens in hyps:  # cost O(input_batch_size | ccu)
         tokens = tokens.cpu()
         start = -1
@@ -189,9 +189,9 @@ def get_output_with_timestamps(hyps, char_dict, model_type):
             else:
                 if (start == -1) and (end == -1):
                     if prev_end != -1:
-                        start = math.ceil((time_stamp + prev_end) / 2)
+                        start = max(math.ceil((time_stamp + prev_end) / 2), time_stamp - 2)
                     else:
-                        start = max(time_stamp - int(max_silence / 2), 0)
+                        start = max(time_stamp - 2, 0)
                 silence_cum = 0
 
                 decode_per_time.extend(tokens[time_stamp][~blk_mask].tolist())

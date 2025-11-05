@@ -52,6 +52,7 @@ def transcribe_audio(
     left_context_size: int = 128,
     right_context_size: int = 128,
     total_batch_duration: int = 1800,
+    max_silence_duration: float = 0.5,
 ) -> Tuple[List[Dict], str]:
     """Transcribe audio/video using Chunkformer model's endless_decode
 
@@ -64,6 +65,7 @@ def transcribe_audio(
         left_context_size: Left context window size
         right_context_size: Right context window size
         total_batch_duration: Total batch duration in seconds
+        max_silence_duration: Maximum silence duration in seconds for sentence break detection
 
     Returns:
         Tuple of (segments list, full transcript string)
@@ -90,7 +92,8 @@ def transcribe_audio(
                     left_context_size=left_context_size,
                     right_context_size=right_context_size,
                     total_batch_duration=total_batch_duration,
-                    return_timestamps=True,  # Get timestamps along with transcription
+                    return_timestamps=True,
+                    max_silence_duration=max_silence_duration,
                 )
 
             decode_elapsed = time.time() - decode_start

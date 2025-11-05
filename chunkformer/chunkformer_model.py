@@ -305,6 +305,7 @@ class ChunkFormerModel(PreTrainedModel):
         right_context_size: Optional[int] = 128,
         total_batch_duration: int = 1800,
         return_timestamps: bool = True,
+        max_silence_duration: float = 0.5,
     ):
         """
         Perform streaming/endless decoding on long-form audio.
@@ -316,6 +317,7 @@ class ChunkFormerModel(PreTrainedModel):
             right_context_size: Right context size
             total_batch_duration: Total duration in seconds for batch processing
             return_timestamps: Whether to return timestamps
+            max_silence_duration: Maximum silence duration in seconds for sentence break detection
         """
 
         def get_max_input_context(c, r, n):
@@ -426,7 +428,7 @@ class ChunkFormerModel(PreTrainedModel):
 
         if self.char_dict is not None:
             decode_result = get_output_with_timestamps(
-                token_predictions, self.char_dict, self.config.model
+                token_predictions, self.char_dict, self.config.model, max_silence_duration
             )[0]
             if not return_timestamps:
                 decode_result = " ".join([item["decode"] for item in decode_result]).strip()

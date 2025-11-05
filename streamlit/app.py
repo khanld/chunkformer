@@ -20,6 +20,7 @@ from config import (
     CHUNK_SIZE,
     ENV_DISABLE_TQDM,
     LEFT_CONTEXT_SIZE,
+    MAX_SILENCE_DURATION,
     MODEL_OPTIONS,
     PAGE_CONFIG,
     RIGHT_CONTEXT_SIZE,
@@ -69,6 +70,19 @@ def render_sidebar():
         )
 
         st.markdown("---")
+        st.subheader("🎚️ Advanced Settings")
+
+        max_silence_duration = st.slider(
+            "Max Silence Duration (seconds)",
+            min_value=0.1,
+            max_value=2.0,
+            value=MAX_SILENCE_DURATION,
+            step=0.1,
+            help="Maximum duration of silence to detect sentence breaks.  \
+                    Lower values create more segments.",
+        )
+
+        st.markdown("---")
         st.subheader("ℹ️ About")
         st.markdown(
             """
@@ -81,7 +95,7 @@ def render_sidebar():
         """
         )
 
-        return model_choice
+        return model_choice, max_silence_duration
 
 
 def render_results_section(results: dict, uploaded_file):
@@ -170,12 +184,13 @@ def render_results_section(results: dict, uploaded_file):
         st.metric("Character Count", results["char_count"], delta=None)
 
 
-def process_video(uploaded_file, model_choice: str):
+def process_video(uploaded_file, model_choice: str, max_silence_duration: float):
     """Process the uploaded video file
 
     Args:
         uploaded_file: Streamlit uploaded file object
         model_choice: Selected model path
+        max_silence_duration: Maximum silence duration for sentence break detection
     """
     st.session_state[SESSION_STATE_RESULTS] = None
 
@@ -250,6 +265,7 @@ def process_video(uploaded_file, model_choice: str):
                     left_context_size=LEFT_CONTEXT_SIZE,
                     right_context_size=RIGHT_CONTEXT_SIZE,
                     total_batch_duration=TOTAL_BATCH_DURATION,
+                    max_silence_duration=max_silence_duration,
                 )
 
             transcribe_elapsed = time.time() - transcribe_start
@@ -307,7 +323,7 @@ def main():
     render_hero_section()
 
     # Sidebar configuration
-    model_choice = render_sidebar()
+    model_choice, max_silence_duration = render_sidebar()
 
     # Main content layout
     st.markdown("---")
@@ -348,7 +364,7 @@ def main():
         start_button = st.button("🚀 Start Transcription", type="primary", use_container_width=True)
 
         if start_button:
-            process_video(uploaded_file, model_choice)
+            process_video(uploaded_file, model_choice, max_silence_duration)
 
         # Display results if available
         results = st.session_state.get(SESSION_STATE_RESULTS)
