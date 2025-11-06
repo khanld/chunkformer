@@ -433,21 +433,6 @@ class Transducer(ASRModel):
         return hyps
 
     @torch.jit.export
-    def forward_encoder_chunk(
-        self,
-        xs: torch.Tensor,
-        offset: int,
-        required_cache_size: int,
-        att_cache: torch.Tensor = torch.zeros(0, 0, 0, 0),
-        cnn_cache: torch.Tensor = torch.zeros(0, 0, 0, 0),
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-
-        result: Tuple[torch.Tensor, torch.Tensor, torch.Tensor] = self.encoder.forward_chunk(
-            xs, offset, required_cache_size, att_cache, cnn_cache
-        )
-        return result
-
-    @torch.jit.export
     def forward_predictor_step(
         self, xs: torch.Tensor, cache: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, List[torch.Tensor]]:

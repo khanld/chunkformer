@@ -372,51 +372,6 @@ class ASRModel(torch.nn.Module):
         return self.eos
 
     @torch.jit.export
-    def forward_encoder_chunk(
-        self,
-        xs: torch.Tensor,
-        offset: int,
-        required_cache_size: int,
-        att_cache: torch.Tensor = torch.zeros(0, 0, 0, 0),
-        cnn_cache: torch.Tensor = torch.zeros(0, 0, 0, 0),
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """ Export interface for c++ call, give input chunk xs, and return
-            output from time 0 to current chunk.
-
-        Args:
-            xs (torch.Tensor): chunk input, with shape (b=1, time, mel-dim),
-                where `time == (chunk_size - 1) * subsample_rate + \
-                        subsample.right_context + 1`
-            offset (int): current offset in encoder output time stamp
-            required_cache_size (int): cache size required for next chunk
-                compuation
-                >=0: actual cache size
-                <0: means all history cache is required
-            att_cache (torch.Tensor): cache tensor for KEY & VALUE in
-                transformer/conformer attention, with shape
-                (elayers, head, cache_t1, d_k * 2), where
-                `head * d_k == hidden-dim` and
-                `cache_t1 == chunk_size * num_decoding_left_chunks`.
-            cnn_cache (torch.Tensor): cache tensor for cnn_module in conformer,
-                (elayers, b=1, hidden-dim, cache_t2), where
-                `cache_t2 == cnn.lorder - 1`
-
-        Returns:
-            torch.Tensor: output of current input xs,
-                with shape (b=1, chunk_size, hidden-dim).
-            torch.Tensor: new attention cache required for next chunk, with
-                dynamic shape (elayers, head, ?, d_k * 2)
-                depending on required_cache_size.
-            torch.Tensor: new conformer cnn cache required for next chunk, with
-                same shape as the original cnn_cache.
-
-        """
-        result: Tuple[torch.Tensor, torch.Tensor, torch.Tensor] = self.encoder.forward_chunk(
-            xs, offset, required_cache_size, att_cache, cnn_cache
-        )
-        return result
-
-    @torch.jit.export
     def ctc_activation(self, xs: torch.Tensor) -> torch.Tensor:
         """Export interface for c++ call, apply linear transform and log
             softmax before ctc
