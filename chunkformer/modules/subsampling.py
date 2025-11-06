@@ -286,3 +286,26 @@ class DepthwiseConvSubsampling(torch.nn.Module):
             else:
                 lengths = torch.floor(lengths)
         return lengths.to(dtype=torch.int)
+
+    def reverse_calc_length(self, out_length: int):
+        """
+        Calculates the required input length to produce a given output length
+        after passing through the convolution or max pooling layers.
+        This is the reverse of calc_length.
+        """
+        all_paddings = self._left_padding + self._right_padding
+        kernel_size = self._kernel_size
+        stride = self._stride
+        ceil_mode = self._ceil_mode
+        repeat_num = self._sampling_num
+        add_pad = all_paddings - kernel_size
+        one = 1
+        length = out_length
+        for _ in range(repeat_num):
+            if ceil_mode:
+                length = (length - one) * stride - add_pad + (stride - 1)
+                length = math.floor(length)
+            else:
+                length = (length - one) * stride - add_pad
+                length = math.ceil(length)
+        return length if out_length > 0 else 0

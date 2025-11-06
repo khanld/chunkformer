@@ -66,7 +66,7 @@ class ChunkFormerEncoderLayer(nn.Module):
         pos_emb: torch.Tensor,
         mask_pad: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool),
         att_cache: torch.Tensor = torch.zeros((0, 0, 0, 0)),
-        cnn_cache: torch.Tensor = torch.zeros((0, 0, 0, 0)),
+        cnn_cache: torch.Tensor = torch.zeros((0, 0, 0)),
         chunk_size: int = 0,
         left_context_size: int = 0,
         right_context_size: int = 0,
@@ -82,9 +82,9 @@ class ChunkFormerEncoderLayer(nn.Module):
             mask_pad (torch.Tensor): batch padding mask used for conv module.
                 (#batch, 1，time), (0, 0, 0) means fake mask.
             att_cache (torch.Tensor): Cache tensor of the KEY & VALUE
-                (batch, 1, head, cache_t1, d_k * 3), head * d_k == size.
+                (batch, head, cache_t1, d_k * 2), head * d_k == size.
             cnn_cache (torch.Tensor): Convolution cache in ChunkFormer layer
-                (batch, 1, size, cache_t2)
+                (batch, size, cache_t2)
             chunk_size (int): Chunk size for limited chunk context
             left_context_size (int): Left context size for limited chunk context
             right_context_size (int): Right context size for limited chunk context

@@ -207,24 +207,28 @@ class ASRModel(torch.nn.Module):
         self,
         speech: torch.Tensor,
         speech_lengths: torch.Tensor,
-        decoding_chunk_size: int = -1,
-        num_decoding_left_chunks: int = -1,
+        chunk_size: int = -1,
+        left_context_size: int = -1,
+        right_context_size: int = -1,
         simulate_streaming: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Let's assume B = batch_size
         # 1. Encoder
-        if simulate_streaming and decoding_chunk_size > 0:
+        if simulate_streaming and chunk_size > 0:
             encoder_out, encoder_mask = self.encoder.forward_chunk_by_chunk(
                 speech,
-                decoding_chunk_size=decoding_chunk_size,
-                num_decoding_left_chunks=num_decoding_left_chunks,
+                speech_lengths,
+                chunk_size=chunk_size,
+                left_context_size=left_context_size,
+                right_context_size=right_context_size,
             )  # (B, maxlen, encoder_dim)
         else:
             encoder_out, encoder_mask = self.encoder(
                 speech,
                 speech_lengths,
-                decoding_chunk_size=decoding_chunk_size,
-                num_decoding_left_chunks=num_decoding_left_chunks,
+                chunk_size=chunk_size,
+                left_context_size=left_context_size,
+                right_context_size=right_context_size,
             )
         return encoder_out, encoder_mask
 
@@ -259,8 +263,9 @@ class ASRModel(torch.nn.Module):
         speech: torch.Tensor,
         speech_lengths: torch.Tensor,
         beam_size: int,
-        decoding_chunk_size: int = -1,
-        num_decoding_left_chunks: int = -1,
+        chunk_size: int = -1,
+        left_context_size: int = -1,
+        right_context_size: int = -1,
         ctc_weight: float = 0.0,
         simulate_streaming: bool = False,
         reverse_weight: float = 0.0,
@@ -296,12 +301,13 @@ class ASRModel(torch.nn.Module):
         Returns: dict results of all decoding methods
         """
         assert len(speech) == len(speech_lengths)
-        assert decoding_chunk_size != 0
+        assert chunk_size != 0
         encoder_out, encoder_mask = self._forward_encoder(
             speech,
             speech_lengths,
-            decoding_chunk_size,
-            num_decoding_left_chunks,
+            chunk_size,
+            left_context_size,
+            right_context_size,
             simulate_streaming,
         )
         encoder_lens = encoder_mask.squeeze(1).sum(1)

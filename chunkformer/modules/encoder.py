@@ -299,8 +299,9 @@ class ChunkFormerEncoder(torch.nn.Module):
         self,
         xs: torch.Tensor,
         xs_lens: torch.Tensor,
-        decoding_chunk_size: int = 0,
-        num_decoding_left_chunks: int = -1,
+        chunk_size: int = 0,
+        left_context_size: int = -1,
+        right_context_size: int = -1,
         **kwargs,
     ):
         """
@@ -323,16 +324,16 @@ class ChunkFormerEncoder(torch.nn.Module):
         else:
             # If either decoding_chunk_size or num_decoding_left_chunks
             # is less than 0, use the full context decoding.
-            if decoding_chunk_size < 0 or num_decoding_left_chunks < 0:
-                decoding_chunk_size = 0
-                num_decoding_left_chunks = 0
+            if chunk_size < 0 or left_context_size < 0 or right_context_size < 0:
+                chunk_size = 0
+                left_context_size = 0
+                right_context_size = 0
             return self.forward_encoder(
                 xs=xs,
                 xs_lens=xs_lens,
-                chunk_size=decoding_chunk_size,
-                left_context_size=num_decoding_left_chunks,
-                # we assume left and right context are the same
-                right_context_size=num_decoding_left_chunks,
+                chunk_size=chunk_size,
+                left_context_size=left_context_size,
+                right_context_size=right_context_size,
                 **kwargs,
             )
 

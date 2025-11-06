@@ -300,6 +300,8 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
         """
         bz = query.shape[0]
         n_feat = query.shape[2]
+        q_size = query.size(1)
+
         q, k, v = self.forward_qkv(query, key, value)
         q = q.transpose(1, 2)  # (batch, time1, head, d_k)
 
@@ -332,7 +334,6 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
         elif limited_context_attn:
             # chunking query
             # [B, time1, head, d_k]
-            q_size = q.size(1)
             n_frames_pad = chunk_size - ((q_size - chunk_size) % chunk_size)
             n_frames_pad = n_frames_pad % chunk_size
             q = torch.nn.functional.pad(q, (0, 0, 0, 0, 0, n_frames_pad))

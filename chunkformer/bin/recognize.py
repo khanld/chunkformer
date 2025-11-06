@@ -108,19 +108,25 @@ def get_args():
         help="attention weight for rescoring weight in " "transducer attention rescore mode",
     )
     parser.add_argument(
-        "--decoding_chunk_size",
+        "--chunk_size",
         type=int,
         default=-1,
-        help="""decoding chunk size,
+        help="""chunk size,
                                 <0: for decoding, use full chunk.
                                 >0: for decoding, use fixed chunk size as set.
                                 0: used for training, it's prohibited here""",
     )
     parser.add_argument(
-        "--num_decoding_left_chunks",
+        "--left_context_size",
         type=int,
         default=-1,
-        help="number of left chunks for decoding",
+        help="number of left context size for decoding",
+    )
+    parser.add_argument(
+        "--right_context_size",
+        type=int,
+        default=-1,
+        help="number of right context size for decoding",
     )
     parser.add_argument(
         "--simulate_streaming", action="store_true", help="simulate streaming inference"
@@ -278,8 +284,9 @@ def main():
                     feats,
                     feats_lengths,
                     args.beam_size,
-                    decoding_chunk_size=args.decoding_chunk_size,
-                    num_decoding_left_chunks=args.num_decoding_left_chunks,
+                    chunk_size=args.chunk_size,
+                    left_context_size=args.left_context_size,
+                    right_context_size=args.right_context_size,
                     ctc_weight=args.ctc_weight,
                     simulate_streaming=args.simulate_streaming,
                     reverse_weight=args.reverse_weight,
