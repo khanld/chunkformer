@@ -45,6 +45,22 @@ This document contains evaluation results for ChunkFormer models across differen
 | **test-clean** | 3.19 | 3.22 | 3.20 | 3.20 | 3.18 |
 | **test-other** | 8.51 | 8.54 | 8.53 | 8.53 | 8.51 |
 
+### Chunkformer-CTC-Small-Libri-960h-stream-dct
+#### Model Configuration
+- **Training Dataset**: LibriSpeech 960h
+- **Configuration File**: `examples/asr/ctc/conf/chunkformer-ctc-small-libri-960h-stream-dct.yaml`
+- **Checkpoint**: [![Hugging Face](https://img.shields.io/badge/HuggingFace-chunkformer--ctc--small--libri--960h--stream--dct-orange?logo=huggingface)](https://huggingface.co/khanhld/chunkformer-ctc-small-libri-960h-stream-dct)
+- **Hardware**: 4 GPUs
+- **Search Algorithm**: Greedy Search
+- **Streaming Config**: Each frame corresponds to 80ms. Right context is not used. Format: (left_context, chunk_size)
+
+#### Results on LibriSpeech Test Sets (WER)
+
+| Test Set | (50, 8) | (60, 8) | (50, 6) | (60, 6) | (50, 4) | (60, 4) |
+|:---------------|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
+| **test-clean** | 4.56 | 4.54 | 4.70 | 4.67 | 4.91 | 4.87 |
+| **test-other** | 12.24 | 12.28 | 12.55 | 12.54 | 13.00 | 12.97 |
+
 ---
 
 ## RNN-T Models

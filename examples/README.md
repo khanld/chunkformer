@@ -112,6 +112,12 @@ dir=exp/v0                 # Experiment output directory
 chunkformer/bin/train.py \
     --use_amp \
     ...
+
+# To enable streaming decoding during recognition (Stage 4):
+# Add --simulate_streaming flag in the recognize.py command
+chunkformer/bin/recognize.py \
+    --simulate_streaming \
+    ...
 ...
 ```
 

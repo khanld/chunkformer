@@ -155,8 +155,9 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
   fi
   # Specify decoding_chunk_size if it's a unified dynamic chunk trained model
   # -1 for full chunk
-  decoding_chunk_size=64
-  num_decoding_left_chunks=128
+  chunk_size=
+  left_context_size=
+  right_context_size=
 
   ctc_weight=0.3
   for test in $recog_set; do
@@ -173,8 +174,10 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
       --blank_penalty 0.0 \
       --result_dir $result_dir \
       --ctc_weight $ctc_weight \
-      ${decoding_chunk_size:+--decoding_chunk_size $decoding_chunk_size} \
-      ${num_decoding_left_chunks:+--num_decoding_left_chunks $num_decoding_left_chunks}
+      --simulate_streaming \  # Enable streaming decoding
+      ${chunk_size:+--chunk_size $chunk_size} \
+      ${left_context_size:+--left_context_size $left_context_size} \
+      ${right_context_size:+--right_context_size $right_context_size}
 
     for mode in $decode_modes; do
       test_dir=$result_dir/$mode
