@@ -4,18 +4,20 @@ Handles microphone input with proper buffering and chunk management.
 """
 
 import queue
-from typing import Optional
+from typing import Optional, Type, Union
 
 import numpy as np
 
 try:
     import pyaudio
+
     PYAUDIO_AVAILABLE = True
 except ImportError:
     PYAUDIO_AVAILABLE = False
 
 try:
     import sounddevice as sd
+
     SOUNDDEVICE_AVAILABLE = True
 except ImportError:
     SOUNDDEVICE_AVAILABLE = False
@@ -79,8 +81,8 @@ class PyAudioStreamCapture:
         p = pyaudio.PyAudio()
         for i in range(p.get_device_count()):
             info = p.get_device_info_by_index(i)
-            if info['maxInputChannels'] > 0:
-                marker = " *" if i == p.get_default_input_device_info()['index'] else ""
+            if info["maxInputChannels"] > 0:
+                marker = " *" if i == p.get_default_input_device_info()["index"] else ""
                 print(
                     f"  [{i}] {info['name']} "
                     f"(inputs: {info['maxInputChannels']}, "
@@ -93,57 +95,60 @@ class PyAudioStreamCapture:
     def prompt_device_selection() -> Optional[int]:
         """
         Prompt user to select an audio input device.
-        
+
         Returns:
             Selected device index, or None for default device
         """
         p = pyaudio.PyAudio()
-        
+
         # Get all input devices
         input_devices = []
         default_index = None
-        
+
         try:
             default_info = p.get_default_input_device_info()
-            default_index = default_info['index']
-        except:
+            default_index = default_info["index"]
+        except Exception:
             pass
-        
+
         print("\nAvailable audio input devices:")
         for i in range(p.get_device_count()):
             info = p.get_device_info_by_index(i)
-            if info['maxInputChannels'] > 0:
+            if info["maxInputChannels"] > 0:
                 input_devices.append(i)
                 is_default = " (default)" if i == default_index else ""
                 print(
-                    f"  [{i}] {info['name']} - "
-                    f"{int(info['defaultSampleRate'])} Hz{is_default}"
+                    f"  [{i}] {info['name']} - " f"{int(info['defaultSampleRate'])} Hz{is_default}"
                 )
-        
+
         p.terminate()
-        
+
         if not input_devices:
             print("No input devices found!")
             return None
-        
+
         # Prompt for selection
-        print(f"\nPress Enter for default device, or enter device number [{', '.join(map(str, input_devices))}]: ", end='')
-        
+        device_list = ", ".join(map(str, input_devices))
+        print(
+            f"\nPress Enter for default device, or enter device number " f"[{device_list}]: ",
+            end="",
+        )
+
         try:
             user_input = input().strip()
-            
+
             if user_input == "":
                 # Use default
                 return None
-            
+
             device_index = int(user_input)
-            
+
             if device_index in input_devices:
                 return device_index
             else:
-                print(f"Invalid device index. Using default device.")
+                print("Invalid device index. Using default device.")
                 return None
-                
+
         except (ValueError, KeyboardInterrupt):
             print("\nUsing default device.")
             return None
@@ -164,8 +169,8 @@ class PyAudioStreamCapture:
 
         # Queue complete chunks of desired size
         while len(self.audio_buffer) >= self.chunk_size:
-            chunk = self.audio_buffer[:self.chunk_size]
-            self.audio_buffer = self.audio_buffer[self.chunk_size:]
+            chunk = self.audio_buffer[: self.chunk_size]
+            self.audio_buffer = self.audio_buffer[self.chunk_size :]
             self.audio_queue.put(chunk)
 
         return (None, pyaudio.paContinue)
@@ -199,7 +204,11 @@ class PyAudioStreamCapture:
             self.stream.start_stream()
             self.is_running = True
 
-            device_index = self.device_index if self.device_index is not None else self.pyaudio_instance.get_default_input_device_info()['index']
+            device_index = (
+                self.device_index
+                if self.device_index is not None
+                else self.pyaudio_instance.get_default_input_device_info()["index"]
+            )
             device_info = self.pyaudio_instance.get_device_info_by_index(device_index)
             print(f"✓ Audio capture started on device: {device_info['name']}")
             print(f"  Sample rate: {self.sample_rate} Hz")
@@ -293,7 +302,9 @@ class AudioStreamCapture:
             normalize: If False, returns int16 audio like torchaudio.load(normalize=False)
         """
         if not SOUNDDEVICE_AVAILABLE:
-            raise ImportError("sounddevice is not installed. Install it with: pip install sounddevice")
+            raise ImportError(
+                "sounddevice is not installed. Install it with: pip install sounddevice"
+            )
 
         self.sample_rate = sample_rate
         self.chunk_duration_ms = chunk_duration_ms
@@ -311,7 +322,7 @@ class AudioStreamCapture:
         # Stream object
         self.stream = None
         self.is_running = False
-        
+
         # Buffer for accumulating audio chunks to match desired chunk_size
         # Use int16 by default to match torchaudio.load(normalize=False)
         buffer_dtype = np.int16 if dtype == "int16" else np.float32
@@ -338,7 +349,7 @@ class AudioStreamCapture:
     def prompt_device_selection() -> Optional[int]:
         """
         Prompt user to select an audio input device.
-        
+
         Returns:
             Selected device index, or None for default device
         """
@@ -346,7 +357,7 @@ class AudioStreamCapture:
         devices = sd.query_devices()
         input_devices = []
         default_index = sd.default.device[0]
-        
+
         print("\nAvailable audio input devices:")
         for i, device in enumerate(devices):
             if device["max_input_channels"] > 0:
@@ -356,29 +367,33 @@ class AudioStreamCapture:
                     f"  [{i}] {device['name']} - "
                     f"{int(device['default_samplerate'])} Hz{is_default}"
                 )
-        
+
         if not input_devices:
             print("No input devices found!")
             return None
-        
+
         # Prompt for selection
-        print(f"\nPress Enter for default device, or enter device number [{', '.join(map(str, input_devices))}]: ", end='')
-        
+        device_list = ", ".join(map(str, input_devices))
+        print(
+            f"\nPress Enter for default device, or enter device number " f"[{device_list}]: ",
+            end="",
+        )
+
         try:
             user_input = input().strip()
-            
+
             if user_input == "":
                 # Use default
                 return None
-            
+
             device_index = int(user_input)
-            
+
             if device_index in input_devices:
                 return device_index
             else:
-                print(f"Invalid device index. Using default device.")
+                print("Invalid device index. Using default device.")
                 return None
-                
+
         except (ValueError, KeyboardInterrupt):
             print("\nUsing default device.")
             return None
@@ -398,7 +413,7 @@ class AudioStreamCapture:
 
         # Flatten to 1D
         audio_data = audio_data.flatten()
-        
+
         # Convert to the desired dtype if needed
         if self.dtype == "int16" and audio_data.dtype != np.int16:
             # sounddevice typically gives float32 in range [-1, 1]
@@ -406,14 +421,14 @@ class AudioStreamCapture:
             audio_data = (audio_data * 32767).astype(np.int16)
         elif self.dtype == "float32" and audio_data.dtype != np.float32:
             audio_data = audio_data.astype(np.float32)
-        
+
         # Accumulate audio data
         self.audio_buffer = np.concatenate([self.audio_buffer, audio_data])
-        
+
         # Queue complete chunks of desired size
         while len(self.audio_buffer) >= self.chunk_size:
-            chunk = self.audio_buffer[:self.chunk_size]
-            self.audio_buffer = self.audio_buffer[self.chunk_size:]
+            chunk = self.audio_buffer[: self.chunk_size]
+            self.audio_buffer = self.audio_buffer[self.chunk_size :]
             self.audio_queue.put(chunk)
 
     def start(self):
@@ -426,7 +441,7 @@ class AudioStreamCapture:
             # On macOS, we need to use 0 for blocksize to let the system decide
             # This avoids the AUHAL component not found error
             blocksize = 0 if self.chunk_size else 0
-            
+
             # Create input stream
             self.stream = sd.InputStream(
                 samplerate=self.sample_rate,
@@ -443,7 +458,10 @@ class AudioStreamCapture:
             device_info = sd.query_devices(self.device_index or sd.default.device[0])
             print(f"✓ Audio capture started on device: {device_info['name']}")
             print(f"  Sample rate: {self.sample_rate} Hz")
-            print(f"  Chunk size: {self.chunk_size} samples ({self.chunk_duration_ms}ms) [blocksize: {blocksize}]")
+            print(
+                f"  Chunk size: {self.chunk_size} samples "
+                f"({self.chunk_duration_ms}ms) [blocksize: {blocksize}]"
+            )
             print(f"  Channels: {self.channels}")
             print(f"  Data type: {self.dtype}")
 
@@ -549,7 +567,7 @@ class AudioFileSimulator:
 
         # Convert to numpy
         self.audio = waveform.squeeze().numpy()
-        
+
         # Convert dtype if needed
         if dtype == "int16" and self.audio.dtype != np.int16:
             self.audio = self.audio.astype(np.int16)
@@ -559,7 +577,7 @@ class AudioFileSimulator:
                 self.audio = self.audio.astype(np.float32) / 32767.0
             else:
                 self.audio = self.audio.astype(np.float32)
-        
+
         self.chunk_size = int(sample_rate * chunk_duration_ms / 1000)
         self.position = 0
         self.is_running = False
@@ -619,6 +637,7 @@ if __name__ == "__main__":
     print("Testing audio capture for 5 seconds...")
 
     # Prefer PyAudio on macOS for better stability
+    capture_class: Type[Union[PyAudioStreamCapture, AudioStreamCapture]]
     if PYAUDIO_AVAILABLE:
         print("Using PyAudio backend")
         capture_class = PyAudioStreamCapture

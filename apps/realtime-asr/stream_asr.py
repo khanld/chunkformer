@@ -12,7 +12,7 @@ from typing import Tuple
 import numpy as np
 import torch
 import torchaudio
-from audio_capture import AudioStreamCapture, PyAudioStreamCapture, PYAUDIO_AVAILABLE
+from audio_capture import PYAUDIO_AVAILABLE, AudioStreamCapture, PyAudioStreamCapture
 from config import StreamingConfig
 
 from chunkformer import ChunkFormerModel
@@ -319,7 +319,8 @@ def main():
 
     args = parser.parse_args()
 
-    # Always prompt for device selection unless --no-select-device is specified or --mic-device is provided
+    # Always prompt for device selection unless --no-select-device is
+    # specified or --mic-device is provided
     device_index = args.mic_device
     if device_index is None and not args.no_select_device:
         # Use the appropriate class for device selection
