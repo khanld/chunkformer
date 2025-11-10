@@ -12,7 +12,7 @@ from typing import Tuple
 import numpy as np
 import torch
 import torchaudio
-from audio_capture import AudioStreamCapture
+from audio_capture import AudioStreamCapture, PyAudioStreamCapture, PYAUDIO_AVAILABLE
 from config import StreamingConfig
 
 from chunkformer import ChunkFormerModel
@@ -47,11 +47,14 @@ class RealtimeASR:
         self.accumulated_text = ""  # Accumulate text across all chunks
         self.reset_cache()
 
-        # Audio capture
-        self.audio_capture = AudioStreamCapture(
+        # Audio capture - prefer PyAudio on macOS for better stability
+        # Use int16 format to match torchaudio.load(normalize=False)
+        capture_class = PyAudioStreamCapture if PYAUDIO_AVAILABLE else AudioStreamCapture
+        self.audio_capture = capture_class(
             sample_rate=config.sample_rate,
             chunk_duration_ms=config.chunk_duration_ms,
             device_index=config.device_index,
+            dtype="int16",
         )
 
         print("✓ Model loaded successfully")
@@ -306,10 +309,24 @@ def main():
         "--mic-device",
         type=int,
         default=None,
-        help="Microphone device index (default: system default)",
+        help="Microphone device index (default: prompt for selection)",
+    )
+    parser.add_argument(
+        "--no-select-device",
+        action="store_true",
+        help="Skip interactive device selection and use default device",
     )
 
     args = parser.parse_args()
+
+    # Always prompt for device selection unless --no-select-device is specified or --mic-device is provided
+    device_index = args.mic_device
+    if device_index is None and not args.no_select_device:
+        # Use the appropriate class for device selection
+        if PYAUDIO_AVAILABLE:
+            device_index = PyAudioStreamCapture.prompt_device_selection()
+        else:
+            device_index = AudioStreamCapture.prompt_device_selection()
 
     # Create config
     config = StreamingConfig(
@@ -319,7 +336,7 @@ def main():
         right_context_size=args.right_context_size,
         device=args.device,
         sample_rate=args.sample_rate,
-        device_index=args.mic_device,
+        device_index=device_index,
     )
 
     # Create and run ASR engine
