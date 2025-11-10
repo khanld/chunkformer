@@ -6,10 +6,9 @@ import base64
 import json
 from typing import Dict, List
 
-from utils import prepare_segments_for_player
-
 import streamlit as st
 import streamlit.components.v1 as components
+from utils import prepare_segments_for_player
 
 
 def render_custom_css():

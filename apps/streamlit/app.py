@@ -15,6 +15,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+import streamlit as st
 from audio_processing import save_uploaded_file_with_progress
 from config import (
     CHUNK_SIZE,
@@ -39,8 +40,6 @@ from ui_components import (
     render_synchronized_player,
 )
 from utils import create_subtitle_srt, format_timestamp, guess_video_mime_type
-
-import streamlit as st
 
 # Configure logging
 logging.basicConfig(

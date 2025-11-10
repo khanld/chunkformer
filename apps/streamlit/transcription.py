@@ -8,9 +8,8 @@ import time
 from contextlib import redirect_stderr, redirect_stdout
 from typing import Dict, List, Tuple
 
-from utils import timestamp_to_seconds
-
 import streamlit as st
+from utils import timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
 
