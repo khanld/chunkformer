@@ -78,6 +78,14 @@ def Dataset(
     if tokenizer is not None:
         dataset = dataset.map(partial(processor.tokenize, tokenizer=tokenizer))
 
+    # Classification-specific processing
+    dataset_type = conf.get("dataset_type", "asr")
+    if dataset_type == "classification" or "tasks" in conf:
+        tasks = conf.get("tasks", [])
+        if tasks:
+            # Parse classification labels (convert strings to integers)
+            dataset = dataset.map(partial(processor.parse_classification_labels, tasks=tasks))
+
     filter_conf = conf.get("filter_conf", {})
     dataset = dataset.filter(partial(processor.filter, **filter_conf))
 
@@ -114,9 +122,9 @@ def Dataset(
         spec_trim_conf = conf.get("spec_trim_conf", {})
         dataset = dataset.map(partial(processor.spec_trim, **spec_trim_conf))
 
-    language_conf = conf.get("language_conf", {"limited_langs": ["zh", "en"]})
-    dataset = dataset.map(partial(processor.detect_language, **language_conf))
-    dataset = dataset.map(processor.detect_task)
+    # language_conf = conf.get("language_conf", {"limited_langs": ["zh", "en"]})
+    # dataset = dataset.map(partial(processor.detect_language, **language_conf))
+    # dataset = dataset.map(processor.detect_task)
 
     shuffle = conf.get("shuffle", True)
     if shuffle:
@@ -132,13 +140,12 @@ def Dataset(
     batch_type = batch_conf.get("batch_type", "static")
     pad_feat = batch_conf.get("pad_feat", "True")
 
+    wrapper_func = lambda batch: processor.padding(batch, pad_feat=pad_feat)
     assert batch_type in ["static", "bucket", "dynamic"]
     if batch_type == "static":
         assert "batch_size" in batch_conf
         batch_size = batch_conf.get("batch_size", 16)
-        dataset = dataset.batch(
-            batch_size, wrapper_class=lambda batch: processor.padding(batch, pad_feat)
-        )
+        dataset = dataset.batch(batch_size, wrapper_class=wrapper_func)
     elif batch_type == "bucket":
         assert "bucket_boundaries" in batch_conf
         assert "bucket_batch_sizes" in batch_conf
@@ -146,13 +153,13 @@ def Dataset(
             processor.feats_length_fn,
             batch_conf["bucket_boundaries"],
             batch_conf["bucket_batch_sizes"],
-            wrapper_class=lambda batch: processor.padding(batch, pad_feat),
+            wrapper_class=wrapper_func,
         )
     else:
         max_frames_in_batch = batch_conf.get("max_frames_in_batch", 12000)
         dataset = dataset.dynamic_batch(
             processor.DynamicBatchWindow(max_frames_in_batch),
-            wrapper_class=lambda batch: processor.padding(batch, pad_feat),
+            wrapper_class=wrapper_func,
         )
 
     return dataset

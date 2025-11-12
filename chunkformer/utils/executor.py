@@ -78,7 +78,7 @@ class Executor:
                 if wenet_join(group_join, info_dict):
                     break
 
-                if batch_dict["target_lengths"].size(0) == 0:
+                if "target_lengths" in batch_dict and batch_dict["target_lengths"].size(0) == 0:
                     continue
 
                 context = None

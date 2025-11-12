@@ -1,0 +1,106 @@
+# ChunkFormer Speech Classification Configuration
+# Single-task example: Gender classification
+
+
+# Encoder configuration
+encoder: chunkformer
+encoder_conf:
+    output_size: 256    # dimension of attention
+    attention_heads: 4
+    linear_units: 2048  # the number of units of position-wise feed forward
+    num_blocks: 12      # the number of encoder blocks
+    dropout_rate: 0.1
+    positional_dropout_rate: 0.1
+    attention_dropout_rate: 0.1
+    input_layer: dw_striding
+    normalize_before: true
+    cnn_module_kernel: 15
+    use_cnn_module: True
+    activation_type: 'swish'
+    pos_enc_layer_type: 'chunk_rel_pos'
+    selfattention_layer_type: 'chunk_rel_seflattn'
+    cnn_module_norm: 'layer_norm'
+    # Enable dynamic chunking for varied context training
+    dynamic_conv: true
+    dynamic_chunk_sizes: [-1, 64, 128]
+    dynamic_left_context_sizes: [64, 128]
+    dynamic_right_context_sizes: [64, 128]
+
+# Model configuration
+model: classification
+model_conf:
+    # Classification tasks: task_name -> num_classes
+    tasks:
+        gender: 2  # Example: male (0), female (1)
+    dropout_rate: 0.1
+
+# CMVN (Cepstral Mean and Variance Normalization)
+cmvn: global_cmvn
+cmvn_conf:
+    cmvn_file: 'data/train/global_cmvn'
+    is_json_cmvn: true
+
+# Dataset configuration
+dataset: classification
+dataset_conf:
+    # Task names (must match model_conf.tasks)
+    tasks: ['gender']
+
+    # Require all labels to be present for each sample
+    require_all_labels: true
+
+    # Audio filtering
+    filter_conf:
+        max_length: 40960   # Maximum audio length in samples
+        min_length: 0    # Minimum audio length in samples
+
+    # Resampling
+    resample_conf:
+        resample_rate: 16000
+
+    # Feature extraction (Fbank)
+    fbank_conf:
+        num_mel_bins: 80
+        frame_shift: 10
+        frame_length: 25
+        dither: 1.0
+
+    # Data augmentation
+    speed_perturb: true    # Speed perturbation
+
+    spec_aug: true         # SpecAugment
+    spec_aug_conf:
+        num_t_mask: 2
+        num_f_mask: 2
+        max_t: 50
+        max_f: 10
+
+    # Data loading
+    shuffle: true
+    shuffle_conf:
+        shuffle_size: 1000
+    sort: false
+    sort_conf:
+        sort_size: 500
+
+    batch_conf:
+        batch_type: 'static' # static or dynamic
+        max_frames_in_batch: 300000
+        batch_size: 4
+        pad_feat: True
+
+# Training configuration
+grad_clip: 5.0
+accum_grad: 1
+max_epoch: 100
+log_interval: 5
+
+# Optimizer
+optim: adam
+optim_conf:
+    lr: 0.001
+
+# Scheduler
+scheduler: warmuplr
+scheduler_conf:
+    warmup_steps: 1000

@@ -115,7 +115,7 @@ filterwarnings = [
 
 [tool.flake8]
 max-line-length = 100
-extend-ignore = ["E203", "W503", "B008", "C416", "EXE001", "E741"]
+extend-ignore = ["E203", "W503", "B008", "C416", "EXE001", "E741", "E731"]
 exclude = [
     ".git",
     "__pycache__",
