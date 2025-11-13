@@ -137,7 +137,6 @@ def main():
                 chunk_size=args.chunk_size,
                 left_context_size=args.left_context_size,
                 right_context_size=args.right_context_size,
-                return_probabilities=True,
             )
 
             # Process results

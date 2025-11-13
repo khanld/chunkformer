@@ -154,11 +154,14 @@ GENDER:
 ### Convert Text Labels to Integers
 
 ```bash
-python tools/convert_classification_labels.py \
+# Basic usage - auto-detects tasks from columns ending with '_label'
+python tools/convert_text_labels_to_int.py \
+    --input data.tsv
+
+# Or specify tasks explicitly
+python tools/convert_text_labels_to_int.py \
     --input data.tsv \
-    --output data_converted.tsv \
-    --label_columns gender_label emotion_label region_label \
-    --mapping_dir label_mappings
+    --tasks gender emotion region
 ```
 
 ### Split Train/Test

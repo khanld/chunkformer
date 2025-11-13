@@ -236,7 +236,6 @@ class SpeechClassificationModel(torch.nn.Module):
         chunk_size: int = -1,
         left_context_size: int = -1,
         right_context_size: int = -1,
-        return_probabilities: bool = False,
     ) -> Dict[str, torch.Tensor]:
         """Inference: classify audio samples.
 
@@ -246,12 +245,11 @@ class SpeechClassificationModel(torch.nn.Module):
             chunk_size: Chunk size for chunked processing
             left_context_size: Left context size
             right_context_size: Right context size
-            return_probabilities: If True, return probabilities instead of predictions
 
         Returns:
             Dictionary containing for each task:
                 - {task_name}_prediction: (batch,) predicted class indices
-                - {task_name}_probability: (batch, num_classes) class probabilities (if requested)
+                - {task_name}_probability: (batch, num_classes) class probabilities
         """
         # Encode
         encoder_out, encoder_mask = self.encode(
@@ -274,10 +272,9 @@ class SpeechClassificationModel(torch.nn.Module):
             predictions = torch.argmax(logits, dim=-1)
             results[f"{task_name}_prediction"] = predictions
 
-            # Get probabilities if requested
-            if return_probabilities:
-                probabilities = F.softmax(logits, dim=-1)
-                results[f"{task_name}_probability"] = probabilities
+            # Always get probabilities
+            probabilities = F.softmax(logits, dim=-1)
+            results[f"{task_name}_probability"] = probabilities
 
         return results
 

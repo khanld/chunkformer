@@ -113,7 +113,6 @@ result = model.classify_audio(
     chunk_size=-1,  # -1 for full attention
     left_context_size=-1,
     right_context_size=-1,
-    return_probabilities=True
 )
 
 print(result)
@@ -192,8 +191,7 @@ To classify a single audio file:
 ```bash
 chunkformer-decode \
     --model_checkpoint path/to/classification/model \
-    --audio_file path/to/audio.wav \
-    --return_probabilities
+    --audio_file path/to/audio.wav
 ```
 
 ---

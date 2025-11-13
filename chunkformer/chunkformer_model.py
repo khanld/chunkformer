@@ -3,6 +3,7 @@ Hugging Face compatible ChunkFormer implementation
 """
 
 import argparse
+import json
 import os
 from contextlib import nullcontext
 from typing import List, Optional, Union
@@ -75,6 +76,7 @@ class ChunkFormerModel(PreTrainedModel):
         # Initialize the model components directly (avoiding file path dependencies)
         self.model = self._init_model_from_config()
         self.char_dict = None  # Will be set when loading symbol table
+        self.label_mapping = None  # Will be set when loading label_mapping.json
         self.is_classification = isinstance(self.model, SpeechClassificationModel)
 
         # Post-init
@@ -194,6 +196,13 @@ class ChunkFormerModel(PreTrainedModel):
         if os.path.exists(vocab_path):
             symbol_table = read_symbol_table(vocab_path)
             model.char_dict = {v: k for k, v in symbol_table.items()}  # type: ignore[assignment]
+
+        # Load label mapping for classification models
+        label_mapping_path = os.path.join(pretrained_model_name_or_path, "label_mapping.json")
+        if os.path.exists(label_mapping_path):
+            with open(label_mapping_path, "r") as f:
+                model.label_mapping = json.load(f)
+            logger.info(f"Loaded label mapping from: {label_mapping_path}")
 
         return model
 
@@ -549,7 +558,6 @@ class ChunkFormerModel(PreTrainedModel):
         chunk_size: Optional[int] = -1,
         left_context_size: Optional[int] = -1,
         right_context_size: Optional[int] = -1,
-        return_probabilities: bool = False,
     ):
         """
         Perform classification on a single audio file.
@@ -559,12 +567,30 @@ class ChunkFormerModel(PreTrainedModel):
             chunk_size: Chunk size for processing (-1 for full attention)
             left_context_size: Left context size
             right_context_size: Right context size
-            return_probabilities: Whether to return class probabilities
 
         Returns:
-            Dictionary containing predictions for each task:
-                - {task_name}: predicted class index (int)
-                - {task_name}_probability: class probabilities (list) if return_probabilities=True
+            Dictionary containing predictions for each task in the format:
+            {
+                task_name: {
+                    "label": str,      # Human-readable label name
+                    "label_id": int,   # Numeric label ID
+                    "prob": float      # Probability of predicted class
+                }
+            }
+
+            Example:
+            {
+                "gender": {
+                    "label": "female",
+                    "label_id": 0,
+                    "prob": 0.95
+                },
+                "emotion": {
+                    "label": "neutral",
+                    "label_id": 5,
+                    "prob": 0.80
+                }
+            }
         """
         if not self.is_classification:
             raise ValueError(
@@ -585,18 +611,29 @@ class ChunkFormerModel(PreTrainedModel):
             chunk_size=chunk_size,
             left_context_size=left_context_size,
             right_context_size=right_context_size,
-            return_probabilities=return_probabilities,
         )
 
-        # Convert to simpler format
+        # Convert to desired format with label names
         output = {}
         for key, value in results.items():
-            if "_prediction" in key:
-                task_name = key.replace("_prediction", "")
-                output[task_name] = int(value.item())
-            elif "_probability" in key and return_probabilities:
-                task_name = key.replace("_probability", "")
-                output[f"{task_name}_probability"] = value.squeeze(0).cpu().tolist()
+            task_name = key.replace("_prediction", "")
+            label_id = int(value.item())
+
+            # Get label name from label_mapping if available
+            label_name = str(label_id)  # Default to label_id as string
+
+            if self.label_mapping and task_name in self.label_mapping:
+                # Direct lookup: label_mapping is already {id: label}
+                label_name = self.label_mapping[task_name].get(str(label_id), str(label_id))
+
+            # Get probability (always available now)
+            prob_key = f"{task_name}_probability"
+            probability = 0.0
+            if prob_key in results:
+                probs = results[prob_key].squeeze(0).cpu().tolist()
+                probability = probs[label_id]
+
+            output[task_name] = {"label": label_name, "label_id": label_id, "prob": probability}
 
         return output
 
@@ -653,11 +690,6 @@ def main():
         help="Path to the TSV file containing the audio list (ASR only). \
             The TSV file must have one column named 'wav'. \
             If 'txt' column is provided, Word Error Rate (WER) is computed",
-    )
-    parser.add_argument(
-        "--return_probabilities",
-        action="store_true",
-        help="Return class probabilities for classification mode (default: False)",
     )
     parser.add_argument(
         "--full_attn",
@@ -748,7 +780,6 @@ def main():
             assert args.audio_file is not None, "`audio_file` must be provided for classification"
 
             print(f"Audio File: {args.audio_file}")
-            print(f"Return Probabilities: {args.return_probabilities}")
 
             # Get tasks
             tasks = model.get_tasks()
@@ -760,21 +791,22 @@ def main():
                 chunk_size=args.chunk_size,
                 left_context_size=args.left_context_size,
                 right_context_size=args.right_context_size,
-                return_probabilities=args.return_probabilities,
             )
 
             # Print results
             print(f"\nClassification Results for: {args.audio_file}")
             print("=" * 70)
-            for task_name in tasks.keys():
-                predicted_class = result[task_name]
-                print(f"{task_name.capitalize()}: {predicted_class}")
+            for task_name, task_result in result.items():
+                label = task_result.get("label", "N/A")
+                label_id = task_result.get("label_id", -1)
+                prob = task_result.get("prob")
 
-                if args.return_probabilities:
-                    probs = result[f"{task_name}_probability"]
-                    print("  Probabilities:")
-                    for class_idx, prob in enumerate(probs):
-                        print(f"    Class {class_idx}: {prob:.4f}")
+                print(f"{task_name.capitalize()}:")
+                print(f"  Label: {label}")
+                print(f"  Label ID: {label_id}")
+                if prob is not None:
+                    print(f"  Probability: {prob:.4f}")
+                print()
             print("=" * 70)
 
 

@@ -16,7 +16,7 @@
 """Convert text classification labels to integer labels.
 
 This script converts classification labels from text format to integer format
-and creates label mapping files.
+and automatically creates a label_mapping.json file.
 
 Example:
     Input TSV:
@@ -24,18 +24,24 @@ Example:
         utt1    a.wav   male           happy
         utt2    b.wav   female         sad
 
-    Output TSV:
+    Output TSV (always data.tsv):
         key     wav     gender_label    emotion_label
         utt1    a.wav   0               0
         utt2    b.wav   1               1
 
-    Label mappings (gender.txt):
-        male 0
-        female 1
+    Note: If input file is named "data.tsv", it will be renamed to "data_original.tsv"
 
-    Label mappings (emotion.txt):
-        happy 0
-        sad 1
+    Label mappings (label_mapping.json, automatically created):
+        {
+            "gender": {
+                "0": "male",
+                "1": "female"
+            },
+            "emotion": {
+                "0": "happy",
+                "1": "sad"
+            }
+        }
 """
 
 import argparse
@@ -50,37 +56,11 @@ def parse_args():
     )
     parser.add_argument("--input", "-i", required=True, help="Input TSV file with text labels")
     parser.add_argument(
-        "--output",
-        "-o",
-        required=True,
-        help="Output TSV file with integer labels",
-    )
-    parser.add_argument(
-        "--label-dir",
-        "-l",
-        required=True,
-        help="Output directory for label mapping files",
-    )
-    parser.add_argument(
         "--tasks",
         "-t",
         nargs="+",
         help="List of task names (e.g., gender emotion region). "
         "If not specified, will auto-detect from column names ending with '_label'",
-    )
-    parser.add_argument(
-        "--auto-create",
-        "-a",
-        action="store_true",
-        help="Automatically create label mappings from data. "
-        "If False, will use existing label files in label-dir",
-    )
-    parser.add_argument(
-        "--format",
-        "-f",
-        choices=["txt", "json"],
-        default="txt",
-        help="Label mapping file format (default: txt)",
     )
     return parser.parse_args()
 
@@ -121,45 +101,22 @@ def detect_tasks(header):
     return tasks
 
 
-def load_label_mapping(label_file, format="txt"):
-    """Load existing label mapping from file."""
-    if not os.path.exists(label_file):
+def load_label_mapping(label_mapping_file):
+    """Load existing label mapping from JSON file."""
+    if not os.path.exists(label_mapping_file):
         return None
 
-    if format == "txt":
-        mapping = {}
-        with open(label_file, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                parts = line.split()
-                if len(parts) == 2:
-                    text_label, int_label = parts
-                    mapping[text_label] = int(int_label)
-        return mapping
-    elif format == "json":
-        with open(label_file, "r", encoding="utf-8") as f:
-            return json.load(f)
-    else:
-        raise ValueError(f"Unknown format: {format}")
+    with open(label_mapping_file, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
-def save_label_mapping(label_file, mapping, format="txt"):
-    """Save label mapping to file."""
-    label_dir = os.path.dirname(label_file)
-    if label_dir:  # Only create dir if there's a directory path
-        os.makedirs(label_dir, exist_ok=True)
+def save_label_mapping(label_mapping_file, all_mappings):
+    """Save all task label mappings to a single JSON file."""
+    label_dir = os.path.dirname(label_mapping_file)
+    os.makedirs(label_dir, exist_ok=True)
 
-    if format == "txt":
-        with open(label_file, "w", encoding="utf-8") as f:
-            for text_label in sorted(mapping.keys(), key=lambda x: mapping[x]):
-                f.write(f"{text_label} {mapping[text_label]}\n")
-    elif format == "json":
-        with open(label_file, "w", encoding="utf-8") as f:
-            json.dump(mapping, f, indent=2, ensure_ascii=False)
-    else:
-        raise ValueError(f"Unknown format: {format}")
+    with open(label_mapping_file, "w", encoding="utf-8") as f:
+        json.dump(all_mappings, f, indent=2, ensure_ascii=False)
 
 
 def create_label_mapping(rows, task):
@@ -176,8 +133,8 @@ def create_label_mapping(rows, task):
     # Sort labels alphabetically for consistency
     sorted_labels = sorted(unique_labels)
 
-    # Create mapping
-    mapping = {label: idx for idx, label in enumerate(sorted_labels)}
+    # Create mapping as id: label (reversed from before)
+    mapping = {str(idx): label for idx, label in enumerate(sorted_labels)}
 
     return mapping
 
@@ -200,11 +157,17 @@ def convert_labels(rows, tasks, label_mappings):
                 print(f"Warning: Empty {label_key} in row with key {row.get('key', 'unknown')}")
                 continue
 
-            if text_label not in label_mappings[task]:
+            # Now label_mappings[task] is {id: label}, so we need to reverse lookup
+            # Create reverse mapping: label -> id
+            reverse_mapping = {
+                label: int(label_id) for label_id, label in label_mappings[task].items()
+            }
+
+            if text_label not in reverse_mapping:
                 missing_labels[task].add(text_label)
                 continue
 
-            new_row[label_key] = str(label_mappings[task][text_label])
+            new_row[label_key] = str(reverse_mapping[text_label])
 
         converted_rows.append(new_row)
 
@@ -220,8 +183,7 @@ def convert_labels(rows, tasks, label_mappings):
 def write_tsv(output_file, header, rows):
     """Write TSV file."""
     output_dir = os.path.dirname(output_file)
-    if output_dir:  # Only create dir if there's a directory path
-        os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
     with open(output_file, "w", encoding="utf-8") as f:
         # Write header
@@ -235,6 +197,21 @@ def write_tsv(output_file, header, rows):
 
 def main():
     args = parse_args()
+
+    # Generate output filenames based on input
+    input_dir = os.path.dirname(args.input) or "."
+    input_basename = os.path.basename(args.input)
+
+    # Output file is always named "data.tsv"
+    output_file = os.path.join(input_dir, "data.tsv")
+    label_mapping_file = os.path.join(input_dir, "label_mapping.json")
+
+    # If input is already "data.tsv", rename it to "data_original.tsv"
+    if input_basename == "data.tsv":
+        original_input_file = os.path.join(input_dir, "data_original.tsv")
+        print(f"Input file is 'data.tsv', renaming to: {original_input_file}")
+        os.rename(args.input, original_input_file)
+        args.input = original_input_file
 
     print(f"Reading input file: {args.input}")
     header, rows = read_tsv(args.input)
@@ -253,41 +230,33 @@ def main():
 
     print(f"Tasks to process: {', '.join(tasks)}")
 
-    # Load or create label mappings
-    label_mappings = {}
-    os.makedirs(args.label_dir, exist_ok=True)
+    # Create label mappings from data
+    all_label_mappings = {}
 
+    print("\nCreating label mappings for all tasks...")
     for task in tasks:
-        label_file = os.path.join(args.label_dir, f"{task}.{args.format}")
+        print(f"  Task '{task}'...")
+        all_label_mappings[task] = create_label_mapping(rows, task)
+        labels_list = [
+            f"{label_id}: {label}" for label_id, label in all_label_mappings[task].items()
+        ]
+        print(f"    Found {len(all_label_mappings[task])} unique labels: {labels_list}")
 
-        if args.auto_create:
-            print(f"\nCreating label mapping for task '{task}'...")
-            label_mappings[task] = create_label_mapping(rows, task)
-            save_label_mapping(label_file, label_mappings[task], args.format)
-            print(f"  Saved mapping to: {label_file}")
-            labels_list = list(label_mappings[task].keys())
-            print(f"  Found {len(label_mappings[task])} unique labels: {labels_list}")
-        else:
-            print(f"\nLoading label mapping for task '{task}' from {label_file}...")
-            mapping = load_label_mapping(label_file, args.format)
-            if mapping is None:
-                raise ValueError(
-                    f"Label mapping file not found: {label_file}. "
-                    "Use --auto-create to create mappings from data."
-                )
-            label_mappings[task] = mapping
-            print(f"  Loaded {len(mapping)} labels")
+    save_label_mapping(label_mapping_file, all_label_mappings)
+    print(f"\nSaved all label mappings to: {label_mapping_file}")
 
     # Convert labels
     print("\nConverting labels...")
-    converted_rows = convert_labels(rows, tasks, label_mappings)
+    converted_rows = convert_labels(rows, tasks, all_label_mappings)
 
-    # Write output
-    print(f"Writing output file: {args.output}")
-    write_tsv(args.output, header, converted_rows)
+    # Write output (always named "data.tsv")
+    print(f"Writing output file: {output_file}")
+    write_tsv(output_file, header, converted_rows)
     print(f"  Wrote {len(converted_rows)} rows")
 
     print("\nDone!")
+    print(f"  Output TSV: {output_file}")
+    print(f"  Label mapping: {label_mapping_file}")
 
 
 if __name__ == "__main__":

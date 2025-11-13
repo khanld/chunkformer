@@ -10,6 +10,7 @@ import os
 import sys
 from typing import Optional
 
+import yaml
 from huggingface_hub import HfApi, create_repo, upload_folder
 from huggingface_hub.utils import RepositoryNotFoundError
 
@@ -27,18 +28,49 @@ class ChunkFormerHubUploader:
         self.api = HfApi(token=token)
         self.token = token
 
-    def create_model_card(self, repo_id: str) -> str:
+    def detect_model_type(self, model_dir: str) -> tuple[str, dict]:
         """
-        Create a model card for the ChunkFormer model.
+        Detect whether the model is ASR or Classification based on config.
 
         Args:
             model_dir: Directory containing the model files
-            repo_id: Repository ID on Hugging Face
-            config: ChunkFormer configuration
 
         Returns:
-            Model card content as string
+            Tuple of (model_type, tasks_info)
+            - model_type: "asr" or "classification"
+            - tasks_info: Dictionary with task information (for classification)
         """
+        config_path = os.path.join(model_dir, "config.yaml")
+
+        if not os.path.exists(config_path):
+            print(f"Warning: config.yaml not found in {model_dir}, assuming ASR model")
+            return "asr", {}
+
+        try:
+            with open(config_path, "r") as f:
+                config = yaml.load(f, Loader=yaml.FullLoader)
+
+            # Check if it's a classification model
+            model_type_str = config.get("model", "asr_model")
+
+            if "classification" in model_type_str.lower():
+                # Extract task information
+                tasks_info = {}
+                if "model_conf" in config:
+                    tasks_conf = config["model_conf"].get("tasks", {})
+                    for task_name, num_classes in tasks_conf.items():
+                        tasks_info[task_name] = num_classes
+
+                return "classification", tasks_info
+            else:
+                return "asr", {}
+
+        except Exception as e:
+            print(f"Warning: Error reading config.yaml: {e}, assuming ASR model")
+            return "asr", {}
+
+    def create_asr_model_card(self, repo_id: str) -> str:
+        """Create model card for ASR model."""
         model_card = f"""---
 tags:
 - speech-recognition
@@ -55,7 +87,7 @@ library_name: transformers
 pipeline_tag: automatic-speech-recognition
 ---
 
-# ChunkFormer Model
+# ChunkFormer ASR Model
 <style>
 img {{
 display: inline;
@@ -73,13 +105,15 @@ Install the package:
 pip install chunkformer
 ```
 
+### Long-Form Audio Transcription
+
 ```python
 from chunkformer import ChunkFormerModel
 
 # Load the model
 model = ChunkFormerModel.from_pretrained("{repo_id}")
 
-# For long-form audio transcription
+# For long-form audio transcription with timestamps
 transcription = model.endless_decode(
     audio_path="path/to/your/audio.wav",
     chunk_size=64,
@@ -88,8 +122,12 @@ transcription = model.endless_decode(
     return_timestamps=True
 )
 print(transcription)
+```
 
-# For batch processing
+### Batch Processing
+
+```python
+# For batch processing multiple audio files
 audio_files = ["audio1.wav", "audio2.wav", "audio3.wav"]
 transcriptions = model.batch_decode(
     audio_paths=audio_files,
@@ -97,6 +135,9 @@ transcriptions = model.batch_decode(
     left_context_size=128,
     right_context_size=128
 )
+
+for i, transcription in enumerate(transcriptions):
+    print(f"Audio {{i+1}}: {{transcription}}")
 ```
 
 ## Training
@@ -123,6 +164,149 @@ If you use this work in your research, please cite:
 ```
 """  # noqa: E501
         return model_card
+
+    def create_classification_model_card(self, repo_id: str, tasks_info: dict) -> str:
+        """Create model card for Classification model."""
+        # Build tasks description
+        tasks_desc = ""
+        if tasks_info:
+            tasks_desc = "\n## Classification Tasks\n\n"
+            for task_name, num_classes in tasks_info.items():
+                tasks_desc += f"- **{task_name.capitalize()}**: {num_classes} classes\n"
+
+        # Build task tags
+        task_tags = ""
+        if tasks_info:
+            for task_name in tasks_info.keys():
+                task_tags += f"- {task_name.lower()}\n"
+        model_card = f"""---
+tags:
+- audio-classification
+- speech-classification
+- audio
+- chunkformer
+- pytorch
+- transformers
+- speech-processing
+{task_tags}
+license: apache-2.0
+library_name: transformers
+pipeline_tag: audio-classification
+---
+
+# ChunkFormer Classification Model
+<style>
+img {{
+display: inline;
+}}
+</style>
+[![GitHub](https://img.shields.io/badge/GitHub-ChunkFormer-blue)](https://github.com/khanld/chunkformer)
+[![Paper](https://img.shields.io/badge/Paper-ICASSP%202025-green)](https://arxiv.org/abs/2502.14673)
+
+This model performs speech classification tasks such as gender recognition, dialect identification, emotion detection, and age classification.
+{tasks_desc}
+
+## Usage
+
+Install the package:
+
+```bash
+pip install chunkformer
+```
+
+### Single Audio Classification
+
+```python
+from chunkformer import ChunkFormerModel
+
+# Load the model
+model = ChunkFormerModel.from_pretrained("{repo_id}")
+
+# Classify a single audio file
+result = model.classify_audio(
+    audio_path="path/to/your/audio.wav",
+    chunk_size=-1,  # -1 for full attention
+    left_context_size=-1,
+    right_context_size=-1
+)
+
+print(result)
+# Output example:
+# {{
+#   'gender': {{
+#       'label': 'female',
+#       'label_id': 0,
+#       'prob': 0.95
+#   }},
+#   'dialect': {{
+#       'label': 'northern dialect',
+#       'label_id': 3,
+#       'prob': 0.70
+#   }},
+#   'emotion': {{
+#       'label': 'neutral',
+#       'label_id': 5,
+#       'prob': 0.80
+#   }}
+# }}
+```
+
+### Command Line Usage
+
+```bash
+chunkformer-decode \\
+    --model_checkpoint {repo_id} \\
+    --audio_file path/to/audio.wav
+```
+
+## Training
+
+This model was trained using the ChunkFormer framework. For more details about the training process and to access the source code, please visit: https://github.com/khanld/chunkformer
+
+Paper: https://arxiv.org/abs/2502.14673
+
+## Citation
+
+If you use this work in your research, please cite:
+
+```bibtex
+@INPROCEEDINGS{{10888640,
+    author={{Le, Khanh and Ho, Tuan Vu and Tran, Dung and Chau, Duc Thanh}},
+    booktitle={{ICASSP 2025 - 2025 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)}},
+    title={{ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription}},
+    year={{2025}},
+    volume={{}},
+    number={{}},
+    pages={{1-5}},
+    keywords={{Scalability;Memory management;Graphics processing units;Signal processing;Performance gain;Hardware;Resource management;Speech processing;Standards;Context modeling;chunkformer;masked batch;long-form transcription}},
+    doi={{10.1109/ICASSP49660.2025.10888640}}}}
+```
+"""  # noqa: E501
+        return model_card
+
+    def create_model_card(self, model_dir: str, repo_id: str) -> str:
+        """
+        Create a model card for the ChunkFormer model (ASR or Classification).
+
+        Args:
+            model_dir: Directory containing the model files
+            repo_id: Repository ID on Hugging Face
+
+        Returns:
+            Model card content as string
+        """
+        # Detect model type
+        model_type, tasks_info = self.detect_model_type(model_dir)
+
+        print(f"Detected model type: {model_type}")
+        if tasks_info:
+            print(f"Classification tasks: {tasks_info}")
+
+        # Generate appropriate model card
+        if model_type == "classification":
+            return self.create_classification_model_card(repo_id, tasks_info)
+        else:
+            return self.create_asr_model_card(repo_id)
 
     def create_repository(self, repo_id: str, private: bool = False) -> bool:
         """
@@ -170,7 +354,7 @@ If you use this work in your research, please cite:
         """
         try:
             # Create model card
-            model_card_content = self.create_model_card(repo_id)
+            model_card_content = self.create_model_card(model_dir, repo_id)
             model_card_path = os.path.join(model_dir, "README.md")
             with open(model_card_path, "w", encoding="utf-8") as f:
                 f.write(model_card_content)

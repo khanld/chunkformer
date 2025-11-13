@@ -11,15 +11,16 @@ Comparison of multi-task classification performance with and without transfer le
 
 ## Experimental Setup
 
-- **Dataset**: LSVSC Vietnamese speech dataset
+- **Dataset**: [LSVSC](doof-ferb/LSVSC) Vietnamese speech dataset
 - **Training Set Size**: 40,102 samples
 - **Dev/Test Set Size**: 4,457 samples each
 - **Tasks**: 4 classification tasks (Gender, Age, Dialect, Emotion)
-- **Model**: ChunkFormer encoder (12 layers, 256 dim, 4 attention heads)
+- **Model**: ChunkFormer encoder
 - **Configuration**: `conf/multi_task.yaml`
 - **Training**:
   - **From Pretrain**: Initialized with pre-trained ASR encoder (`khanhld/chunkformer-rnnt-large-vie`)
   - **From Scratch**: Randomly initialized encoder
+- **Checkpoint**: [![Hugging Face](https://img.shields.io/badge/HuggingFace-chunkformer--gender--emotion--dialect--age--classification-orange?logo=huggingface)](https://huggingface.co/khanhld/chunkformer-gender-emotion-dialect-age-classification)
 
 ## Dataset Statistics
 
