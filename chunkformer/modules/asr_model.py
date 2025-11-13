@@ -112,7 +112,6 @@ class ASRModel(torch.nn.Module):
                 encoder_mask,
                 text,
                 text_lengths,
-                {"langs": batch["langs"], "tasks": batch["tasks"]},
             )
         else:
             loss_att = None

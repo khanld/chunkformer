@@ -278,7 +278,6 @@ def main():
                 else:
                     feats = batch["feats"]
                 feats_lengths = batch["feats_lengths"].to(device)
-                infos = {"tasks": batch["tasks"], "langs": batch["langs"]}
                 results = model.decode(
                     args.modes,
                     feats,
@@ -294,7 +293,6 @@ def main():
                     blank_id=blank_id,
                     blank_penalty=args.blank_penalty,
                     length_penalty=args.length_penalty,
-                    infos=infos,
                 )
                 for i, key in enumerate(keys):
                     for mode, hyps in results.items():
