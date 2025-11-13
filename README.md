@@ -96,8 +96,30 @@ feature, feature_len = model.encode(
 print("feature: ", feature.shape)
 print("feature_len: ", feature_len)
 ```
+### Python API
+#### Classification
 
-### Python API Transcription
+ChunkFormer also supports speech classification tasks (e.g., gender, dialect, emotion, age recognition).
+
+```python
+from chunkformer import ChunkFormerModel
+
+# Load a pre-trained classification model from Hugging Face or local directory
+model = ChunkFormerModel.from_pretrained("path/to/classification/model")
+
+# Single audio classification
+result = model.classify_audio(
+    audio_path="path/to/audio.wav",
+    chunk_size=-1,  # -1 for full attention
+    left_context_size=-1,
+    right_context_size=-1,
+    return_probabilities=True
+)
+
+print(result)
+```
+
+#### Transcription
 ```python
 from chunkformer import ChunkFormerModel
 
@@ -130,13 +152,13 @@ for i, transcription in enumerate(transcriptions):
 
 ```
 
-### Command Line Transcription
-#### Long-Form Audio Testing
+### Command Line
+#### Long-Form Audio Transcription
 To test the model with a single [long-form audio file](samples/audios/audio_1.wav). Audio file extensions ".mp3", ".wav", ".flac", ".m4a", ".aac" are accepted:
 ```bash
 chunkformer-decode \
     --model_checkpoint path/to/hf/checkpoint/repo \
-    --long_form_audio path/to/audio.wav \
+    --audio_file path/to/audio.wav \
     --total_batch_duration 14400 \
     --chunk_size 64 \
     --left_context_size 128 \
@@ -148,7 +170,7 @@ Example Output:
 [00:00:02.500] - [00:00:03.700]: testing the long-form audio
 ```
 
-#### Batch Transcription Testing
+#### Batch Audio Transcription
 The [data.tsv](samples/data.tsv) file must have at least one column named **wav**. Optionally, a column named **txt** can be included to compute the **Word Error Rate (WER)**. Output will be saved to the same file.
 
 ```bash
@@ -163,6 +185,15 @@ chunkformer-decode \
 Example Output:
 ```
 WER: 0.1234
+```
+
+#### Classification
+To classify a single audio file:
+```bash
+chunkformer-decode \
+    --model_checkpoint path/to/classification/model \
+    --audio_file path/to/audio.wav \
+    --return_probabilities
 ```
 
 ---

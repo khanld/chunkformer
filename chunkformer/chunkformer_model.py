@@ -19,13 +19,12 @@ from tqdm import tqdm
 from transformers import PretrainedConfig, PreTrainedModel
 from transformers.utils import logging
 
+from chunkformer.modules.classification_model import SpeechClassificationModel
 from chunkformer.transducer.search.greedy_search import batch_greedy_search, optimized_search
 from chunkformer.utils.checkpoint import load_checkpoint
 from chunkformer.utils.file_utils import read_symbol_table
 from chunkformer.utils.init_model import init_speech_model
 from chunkformer.utils.model_utils import get_output, get_output_with_timestamps
-
-# Import ChunkFormer modules
 
 logger = logging.get_logger(__name__)
 
@@ -76,6 +75,7 @@ class ChunkFormerModel(PreTrainedModel):
         # Initialize the model components directly (avoiding file path dependencies)
         self.model = self._init_model_from_config()
         self.char_dict = None  # Will be set when loading symbol table
+        self.is_classification = isinstance(self.model, SpeechClassificationModel)
 
         # Post-init
         self.post_init()
@@ -231,6 +231,18 @@ class ChunkFormerModel(PreTrainedModel):
     def get_ctc(self):
         """Get the CTC module."""
         return self.model.ctc
+
+    def get_classification_heads(self):
+        """Get the classification heads (for classification models only)."""
+        if self.is_classification and hasattr(self.model, "classification_heads"):
+            return self.model.classification_heads
+        return None
+
+    def get_tasks(self):
+        """Get classification tasks (for classification models only)."""
+        if self.is_classification and hasattr(self.model, "tasks"):
+            return self.model.tasks
+        return None
 
     def encode(
         self,
@@ -530,6 +542,64 @@ class ChunkFormerModel(PreTrainedModel):
 
         return decodes
 
+    @torch.no_grad()
+    def classify_audio(
+        self,
+        audio_path: str,
+        chunk_size: Optional[int] = -1,
+        left_context_size: Optional[int] = -1,
+        right_context_size: Optional[int] = -1,
+        return_probabilities: bool = False,
+    ):
+        """
+        Perform classification on a single audio file.
+
+        Args:
+            audio_path: Path to audio file
+            chunk_size: Chunk size for processing (-1 for full attention)
+            left_context_size: Left context size
+            right_context_size: Right context size
+            return_probabilities: Whether to return class probabilities
+
+        Returns:
+            Dictionary containing predictions for each task:
+                - {task_name}: predicted class index (int)
+                - {task_name}_probability: class probabilities (list) if return_probabilities=True
+        """
+        if not self.is_classification:
+            raise ValueError(
+                "This model is not a classification model. Use ASR decoding methods instead."
+            )
+
+        device = next(self.parameters()).device
+
+        # Load audio and extract features
+        xs, xs_len = self._load_audio_and_extract_features(audio_path)
+        xs = xs.unsqueeze(0).to(device)
+        xs_lens = torch.tensor([xs_len], dtype=torch.long, device=device)
+
+        # Classify
+        results = self.model.classify(
+            speech=xs,
+            speech_lengths=xs_lens,
+            chunk_size=chunk_size,
+            left_context_size=left_context_size,
+            right_context_size=right_context_size,
+            return_probabilities=return_probabilities,
+        )
+
+        # Convert to simpler format
+        output = {}
+        for key, value in results.items():
+            if "_prediction" in key:
+                task_name = key.replace("_prediction", "")
+                output[task_name] = int(value.item())
+            elif "_probability" in key and return_probabilities:
+                task_name = key.replace("_probability", "")
+                output[f"{task_name}_probability"] = value.squeeze(0).cpu().tolist()
+
+        return output
+
 
 # Register the configuration and model
 ChunkFormerConfig.register_for_auto_class()
@@ -540,7 +610,7 @@ def main():
     """Main function for command line interface."""
     # Create argument parser
     parser = argparse.ArgumentParser(
-        description="ChunkFormer ASR inference with command line interface."
+        description="ChunkFormer ASR and Classification inference with command line interface."
     )
 
     # Add arguments with default values
@@ -552,10 +622,13 @@ def main():
         type=int,
         default=1800,
         help="The total audio duration (in second) in a batch \
-        that your GPU memory can handle at once. Default is 1800s",
+        that your GPU memory can handle at once. Default is 1800s (ASR only)",
     )
     parser.add_argument(
-        "--chunk_size", type=int, default=64, help="Size of the chunks (default: 64)"
+        "--chunk_size",
+        type=int,
+        default=64,
+        help="Size of the chunks (default: 64, -1 for full attention)",
     )
     parser.add_argument(
         "--left_context_size", type=int, default=128, help="Size of the left context (default: 128)"
@@ -567,19 +640,24 @@ def main():
         help="Size of the right context (default: 128)",
     )
     parser.add_argument(
-        "--long_form_audio",
+        "--audio_file",
         type=str,
         default=None,
-        help="Path to the long audio file (default: None)",
+        help="Path to a single audio file (for both ASR long-form and classification)",
     )
     parser.add_argument(
         "--audio_list",
         type=str,
         default=None,
         required=False,
-        help="Path to the TSV file containing the audio list. \
+        help="Path to the TSV file containing the audio list (ASR only). \
             The TSV file must have one column named 'wav'. \
             If 'txt' column is provided, Word Error Rate (WER) is computed",
+    )
+    parser.add_argument(
+        "--return_probabilities",
+        action="store_true",
+        help="Return class probabilities for classification mode (default: False)",
     )
     parser.add_argument(
         "--full_attn",
@@ -615,13 +693,11 @@ def main():
     print(f"Chunk Size: {args.chunk_size}")
     print(f"Left Context Size: {args.left_context_size}")
     print(f"Right Context Size: {args.right_context_size}")
-    print(f"Long Form Audio Path: {args.long_form_audio}")
+    print(f"Audio File: {args.audio_file}")
     print(f"Audio List Path: {args.audio_list}")
 
     assert args.model_checkpoint is not None, "You must specify the path to the model"
-    assert (
-        args.long_form_audio or args.audio_list
-    ), "`long_form_audio` or `audio_list` must be activated"
+    assert args.audio_file or args.audio_list, "`long_form_audio` or `audio_list` must be activated"
 
     # Load model using HuggingFace interface
     print("Loading model using HuggingFace interface...")
@@ -631,38 +707,75 @@ def main():
 
     # Perform inference
     with torch.autocast(device.type, dtype) if dtype is not None else nullcontext():
-        if args.long_form_audio:
-            decode = model.endless_decode(
-                args.long_form_audio,
-                chunk_size=args.chunk_size,
-                left_context_size=args.left_context_size,
-                right_context_size=args.right_context_size,
-                total_batch_duration=args.total_batch_duration,
-            )
-            for item in decode:
-                start = f"{Fore.RED}{item['start']}{Style.RESET_ALL}"
-                end = f"{Fore.RED}{item['end']}{Style.RESET_ALL}"
-                print(f"{start} - {end}: {item['decode']}")
+        if not model.is_classification:
+            # ASR model
+            if args.audio_file:
+                # Long-form audio decoding
+                decode = model.endless_decode(
+                    args.audio_file,
+                    chunk_size=args.chunk_size,
+                    left_context_size=args.left_context_size,
+                    right_context_size=args.right_context_size,
+                    total_batch_duration=args.total_batch_duration,
+                )
+                for item in decode:
+                    start = f"{Fore.RED}{item['start']}{Style.RESET_ALL}"
+                    end = f"{Fore.RED}{item['end']}{Style.RESET_ALL}"
+                    print(f"{start} - {end}: {item['decode']}")
+            else:
+                # Batch decode using audio list
+                df = pd.read_csv(args.audio_list, sep="\t")
+                audio_paths = df["wav"].to_list()
+
+                decodes = model.batch_decode(
+                    audio_paths,
+                    chunk_size=args.chunk_size,
+                    left_context_size=args.left_context_size,
+                    right_context_size=args.right_context_size,
+                    total_batch_duration=args.total_batch_duration,
+                )
+                df["decode"] = decodes
+                if "txt" in df.columns:
+                    wer = jiwer.wer(df["txt"].to_list(), decodes)
+                    print(f"Word Error Rate (WER): {wer:.4f}")
+
+                # Save results
+                df.to_csv(args.audio_list, sep="\t", index=False)
+                print(f"Results saved to {args.audio_list}")
+
         else:
-            # Batch decode using HF model interface
-            df = pd.read_csv(args.audio_list, sep="\t")
-            audio_paths = df["wav"].to_list()
+            # Classification model
+            assert args.audio_file is not None, "`audio_file` must be provided for classification"
 
-            decodes = model.batch_decode(
-                audio_paths,
+            print(f"Audio File: {args.audio_file}")
+            print(f"Return Probabilities: {args.return_probabilities}")
+
+            # Get tasks
+            tasks = model.get_tasks()
+            print(f"Classification tasks: {list(tasks.keys())}")
+
+            # Classify single audio file
+            result = model.classify_audio(
+                args.audio_file,
                 chunk_size=args.chunk_size,
                 left_context_size=args.left_context_size,
                 right_context_size=args.right_context_size,
-                total_batch_duration=args.total_batch_duration,
+                return_probabilities=args.return_probabilities,
             )
-            df["decode"] = decodes
-            if "txt" in df.columns:
-                wer = jiwer.wer(df["txt"].to_list(), decodes)
-                print(f"Word Error Rate (WER): {wer:.4f}")  # noqa: E231
 
-            # Save results
-            df.to_csv(args.audio_list, sep="\t", index=False)
-            print(f"Results saved to {args.audio_list}")
+            # Print results
+            print(f"\nClassification Results for: {args.audio_file}")
+            print("=" * 70)
+            for task_name in tasks.keys():
+                predicted_class = result[task_name]
+                print(f"{task_name.capitalize()}: {predicted_class}")
+
+                if args.return_probabilities:
+                    probs = result[f"{task_name}_probability"]
+                    print("  Probabilities:")
+                    for class_idx, prob in enumerate(probs):
+                        print(f"    Class {class_idx}: {prob:.4f}")
+            print("=" * 70)
 
 
 if __name__ == "__main__":
