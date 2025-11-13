@@ -328,7 +328,7 @@ class TestWERPerformance:
                 "chunkformer-decode",
                 "--model_checkpoint",
                 self.model_name,
-                "--long_form_audio",
+                "--audio_file",
                 test_audio_path,
                 "--total_batch_duration",
                 "14400",

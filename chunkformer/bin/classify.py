@@ -150,13 +150,11 @@ def main():
                     pred_key = f"{task}_prediction"
                     prob_key = f"{task}_probability"
 
-                    if pred_key in results:
-                        prediction = results[pred_key][i].item()
-                        pred_dict[task] = prediction
+                    prediction = results[pred_key][i].item()
+                    pred_dict[task] = prediction
 
-                    if prob_key in results:
-                        probabilities = results[prob_key][i].cpu().tolist()
-                        pred_dict[f"{task}_probs"] = probabilities
+                    probability = results[prob_key][i].item()
+                    pred_dict[f"{task}_prob"] = probability
 
                 all_predictions.append(pred_dict)
 

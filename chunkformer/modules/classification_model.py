@@ -249,7 +249,7 @@ class SpeechClassificationModel(torch.nn.Module):
         Returns:
             Dictionary containing for each task:
                 - {task_name}_prediction: (batch,) predicted class indices
-                - {task_name}_probability: (batch, num_classes) class probabilities
+                - {task_name}_probability: (batch,) probability of predicted class
         """
         # Encode
         encoder_out, encoder_mask = self.encode(
@@ -272,9 +272,11 @@ class SpeechClassificationModel(torch.nn.Module):
             predictions = torch.argmax(logits, dim=-1)
             results[f"{task_name}_prediction"] = predictions
 
-            # Always get probabilities
+            # Get probabilities and extract only the predicted class probability
             probabilities = F.softmax(logits, dim=-1)
-            results[f"{task_name}_probability"] = probabilities
+            # Get probability of the predicted class for each sample in batch
+            predicted_probs = probabilities.gather(1, predictions.unsqueeze(1)).squeeze(1)
+            results[f"{task_name}_probability"] = predicted_probs
 
         return results
 

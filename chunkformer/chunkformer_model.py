@@ -616,6 +616,9 @@ class ChunkFormerModel(PreTrainedModel):
         # Convert to desired format with label names
         output = {}
         for key, value in results.items():
+            if not key.endswith("_prediction"):
+                continue
+
             task_name = key.replace("_prediction", "")
             label_id = int(value.item())
 
@@ -626,12 +629,11 @@ class ChunkFormerModel(PreTrainedModel):
                 # Direct lookup: label_mapping is already {id: label}
                 label_name = self.label_mapping[task_name].get(str(label_id), str(label_id))
 
-            # Get probability (always available now)
+            # Get probability
             prob_key = f"{task_name}_probability"
             probability = 0.0
             if prob_key in results:
-                probs = results[prob_key].squeeze(0).cpu().tolist()
-                probability = probs[label_id]
+                probability = results[prob_key].item()
 
             output[task_name] = {"label": label_name, "label_id": label_id, "prob": probability}
 
