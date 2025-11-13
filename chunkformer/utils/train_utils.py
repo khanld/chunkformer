@@ -328,21 +328,21 @@ def check_modify_and_save_config(args, configs, symbol_table):
         configs["lora_conf"]["lora_alpha"] = args.lora_alpha
         configs["lora_conf"]["lora_dropout"] = args.lora_dropout
 
-    if configs["model"] == "asr_model" or configs["model"] == "transducer":
-        if "input_dim" not in configs:
-            if "fbank_conf" in configs["dataset_conf"]:
-                input_dim = configs["dataset_conf"]["fbank_conf"]["num_mel_bins"]
-            elif "log_mel_spectrogram_conf" in configs["dataset_conf"]:
-                input_dim = configs["dataset_conf"]["log_mel_spectrogram_conf"]["num_mel_bins"]
-            else:
-                input_dim = configs["dataset_conf"]["mfcc_conf"]["num_mel_bins"]
+    # Set input_dim if not present (for both ASR and classification models)
+    if "input_dim" not in configs:
+        if "fbank_conf" in configs["dataset_conf"]:
+            configs["input_dim"] = configs["dataset_conf"]["fbank_conf"]["num_mel_bins"]
+        elif "log_mel_spectrogram_conf" in configs["dataset_conf"]:
+            configs["input_dim"] = configs["dataset_conf"]["log_mel_spectrogram_conf"][
+                "num_mel_bins"
+            ]
         else:
-            input_dim = configs["input_dim"]
+            configs["input_dim"] = configs["dataset_conf"]["mfcc_conf"]["num_mel_bins"]
 
-        configs["input_dim"] = input_dim
-
-    configs, _ = get_blank_id(configs, symbol_table)
-    configs["output_dim"] = configs["vocab_size"]
+    # Only process symbol_table for ASR models
+    if symbol_table is not None:
+        configs, _ = get_blank_id(configs, symbol_table)
+        configs["output_dim"] = configs["vocab_size"]
 
     configs["train_engine"] = args.train_engine
     configs["use_amp"] = args.use_amp
@@ -373,7 +373,11 @@ def init_dataset_and_dataloader(args, configs, tokenizer, seed=777):
         configs["dataset_conf"]["cycle"] = configs.get("max_epoch", 100)
     conf = configs["dataset_conf"]
     dataset_type = configs.get("dataset", "asr")
-    configs["vocab_size"] = tokenizer.vocab_size()
+
+    # Set vocab_size for ASR models
+    if dataset_type != "classification":
+        configs["vocab_size"] = tokenizer.vocab_size()
+
     train_dataset = init_dataset(
         dataset_type, args.data_type, args.train_data, tokenizer, conf, True, split="train"
     )
@@ -855,14 +859,31 @@ def log_per_epoch(writer, info_dict):
     lrs = info_dict["lrs"]
     rank = int(os.environ.get("RANK", 0))
     step = info_dict["step"]
+
+    # Get accuracy: either general "acc" or compute average from task-specific accuracies
+    if "acc" in loss_dict:
+        acc_value = tensor_to_scalar(loss_dict["acc"])
+        acc_str = f"acc {acc_value}"
+    else:
+        # For classification: collect all acc_* keys and average them
+        acc_keys = [k for k in loss_dict.keys() if k.startswith("acc_")]
+        if acc_keys:
+            avg_acc = sum(tensor_to_scalar(loss_dict[k]) for k in acc_keys) / len(acc_keys)
+            acc_str = f"acc {avg_acc}"
+            # Also add individual task accuracies
+            task_accs = " ".join(f"{k} {tensor_to_scalar(loss_dict[k]):.4f}" for k in acc_keys)
+            acc_str = f"{acc_str} ({task_accs})"
+        else:
+            acc_str = ""
+
     logging.info(
-        "Epoch {} Step {} CV info lr {} cv_loss {} rank {} acc {}".format(
+        "Epoch {} Step {} CV info lr {} cv_loss {} rank {} {}".format(
             epoch,
             step,
             lrs_to_str(lrs),
             tensor_to_scalar(loss_dict["loss"]),
             rank,
-            tensor_to_scalar(loss_dict["acc"]),
+            acc_str,
         )
     )
 

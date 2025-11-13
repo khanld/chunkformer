@@ -100,19 +100,22 @@ def main():
     if len(args.override_config) > 0:
         configs = override_config(configs, args.override_config)
 
-    # init tokenizer
-    tokenizer = init_tokenizer(configs)
+    model_type = configs.get("model", "asr_model")
+    # init tokenizer (not needed for classification)
+    tokenizer = None if model_type == "classification" else init_tokenizer(configs)
 
     # Init env for ddp OR deepspeed
     _, _, rank = init_distributed(args)
 
-    # Get dataset & dataloader
+    # Get dataset & dataloader (unified for both ASR and classification)
     train_dataset, cv_dataset, train_data_loader, cv_data_loader = init_dataset_and_dataloader(
         args, configs, tokenizer
     )
-
     # Do some sanity checks and save config to arsg.model_dir
-    configs = check_modify_and_save_config(args, configs, tokenizer.symbol_table)
+    if model_type == "classification":
+        configs = check_modify_and_save_config(args, configs, symbol_table=None)
+    else:
+        configs = check_modify_and_save_config(args, configs, tokenizer.symbol_table)
 
     # Init asr model from configs
     model, configs = init_model(args, configs)

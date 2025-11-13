@@ -64,6 +64,7 @@ class SpeechClassificationModel(torch.nn.Module):
         encoder: ChunkFormerEncoder,
         tasks: Dict[str, int],
         dropout_rate: float = 0.1,
+        label_smoothing: float = 0.0,
     ):
         """
         Args:
@@ -72,6 +73,7 @@ class SpeechClassificationModel(torch.nn.Module):
                    e.g., {'gender': 2, 'emotion': 7, 'region': 5}
                    For single task: {'gender': 2}
             dropout_rate: Dropout rate for classification heads
+            label_smoothing: Label smoothing factor (0.0 = no smoothing, typically 0.1)
         """
         super().__init__()
 
@@ -82,6 +84,7 @@ class SpeechClassificationModel(torch.nn.Module):
         self.tasks = tasks
         self.task_names = list(tasks.keys())
         self.num_tasks = len(tasks)
+        self.label_smoothing = label_smoothing
 
         # Create classification head for each task
         encoder_output_size = encoder.output_size()
@@ -146,8 +149,8 @@ class SpeechClassificationModel(torch.nn.Module):
             # Get logits from classification head
             logits = self.classification_heads[task_name](pooled_features)
 
-            # Compute cross-entropy loss
-            loss = F.cross_entropy(logits, labels)
+            # Compute cross-entropy loss with label smoothing
+            loss = F.cross_entropy(logits, labels, label_smoothing=self.label_smoothing)
 
             # Compute accuracy
             predictions = torch.argmax(logits, dim=-1)

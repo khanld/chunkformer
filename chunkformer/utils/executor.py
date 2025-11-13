@@ -138,6 +138,7 @@ class Executor:
         model.eval()
         info_dict = copy.deepcopy(configs)
         num_seen_utts, loss_dict, total_acc = 1, {}, []  # avoid division by 0
+        acc_dict = {}  # For accumulating accuracies (classification or ASR)
         with torch.no_grad():
             for batch_idx, batch_dict in enumerate(cv_data_loader):
                 info_dict["tag"] = "CV"
@@ -145,7 +146,7 @@ class Executor:
                 info_dict["batch_idx"] = batch_idx
                 info_dict["cv_step"] = batch_idx
 
-                num_utts = batch_dict["target_lengths"].size(0)
+                num_utts = batch_dict["feats"].size(0)
                 if num_utts == 0:
                     continue
 
@@ -158,17 +159,32 @@ class Executor:
                     if _dict.get("th_accuracy", None) is not None
                     else 0.0
                 )
-                for loss_name, loss_value in _dict.items():
-                    if (
-                        loss_value is not None
-                        and "loss" in loss_name
-                        and torch.isfinite(loss_value)
-                    ):
-                        loss_value = loss_value.item()
-                        loss_dict[loss_name] = loss_dict.get(loss_name, 0) + loss_value * num_utts
+
+                # Accumulate all losses and accuracies
+                for key, value in _dict.items():
+                    if value is None or not torch.isfinite(value):
+                        continue
+
+                    value_item = value.item()
+
+                    # Accumulate losses
+                    if "loss" in key:
+                        loss_dict[key] = loss_dict.get(key, 0) + value_item * num_utts
+
+                    # Accumulate accuracies (for classification: acc_gender, acc_emotion, etc.)
+                    if "acc" in key:
+                        acc_dict[key] = acc_dict.get(key, 0) + value_item * num_utts
+
                 # write cv: log
                 log_per_step(writer=None, info_dict=info_dict, timer=self.cv_step_timer)
-        for loss_name, loss_value in loss_dict.items():
+
+        # Average all accumulated losses
+        for loss_name in loss_dict:
             loss_dict[loss_name] = loss_dict[loss_name] / num_seen_utts
+
+        # Average all accumulated accuracies
+        for acc_name in acc_dict:
+            loss_dict[acc_name] = acc_dict[acc_name] / num_seen_utts
+
         loss_dict["acc"] = sum(total_acc) / len(total_acc)
         return loss_dict

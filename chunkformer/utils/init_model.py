@@ -17,6 +17,7 @@ import os
 import torch
 
 from ..modules.asr_model import ASRModel
+from ..modules.classification_model import SpeechClassificationModel
 from ..modules.cmvn import GlobalCMVN
 from ..modules.ctc import CTC
 from ..modules.decoder import BiTransformerDecoder, TransformerDecoder
@@ -53,6 +54,7 @@ CHUNKFORMER_JOINT_CLASSES = {
 CHUNKFORMER_MODEL_CLASSES = {
     "asr_model": ASRModel,
     "transducer": Transducer,
+    "classification": SpeechClassificationModel,
 }
 
 
@@ -67,7 +69,12 @@ def init_speech_model(args, configs):
         global_cmvn = None
 
     input_dim = configs["input_dim"]
-    vocab_size = configs["output_dim"]
+
+    # Get model type early to determine what components to create
+    model_type = configs.get("model", "asr_model")
+
+    # vocab_size is only needed for ASR models
+    vocab_size = configs.get("output_dim", 0) if model_type != "classification" else 0
 
     # ChunkFormer only supports chunkformer encoder
     encoder_type = configs.get("encoder", "chunkformer")
@@ -79,21 +86,36 @@ def init_speech_model(args, configs):
         input_dim, global_cmvn=global_cmvn, **configs["encoder_conf"]
     )
 
-    # Create decoder
-    decoder = CHUNKFORMER_DECODER_CLASSES[decoder_type](
-        vocab_size, encoder.output_size(), **configs["decoder_conf"]
-    )
+    # Create decoder and CTC only for ASR models
+    decoder = None
+    ctc = None
 
-    # Create CTC
-    ctc = CHUNKFORMER_CTC_CLASSES[ctc_type](
-        vocab_size,
-        encoder.output_size(),
-        blank_id=configs["ctc_conf"]["ctc_blank_id"] if "ctc_conf" in configs else 0,
-    )
+    if model_type != "classification":
+        # Create decoder
+        decoder = CHUNKFORMER_DECODER_CLASSES[decoder_type](
+            vocab_size, encoder.output_size(), **configs["decoder_conf"]
+        )
+
+        # Create CTC
+        ctc = CHUNKFORMER_CTC_CLASSES[ctc_type](
+            vocab_size,
+            encoder.output_size(),
+            blank_id=configs["ctc_conf"]["ctc_blank_id"] if "ctc_conf" in configs else 0,
+        )
 
     # Create model based on type
-    model_type = configs.get("model", "asr_model")
-    if model_type == "transducer":
+    if model_type == "classification":
+        # Classification model only needs encoder
+        tasks = configs["model_conf"].get("tasks", {})
+        if not tasks:
+            raise ValueError("Classification model requires 'tasks' in model_conf")
+
+        model = CHUNKFORMER_MODEL_CLASSES[model_type](
+            encoder=encoder,
+            tasks=tasks,
+            **{k: v for k, v in configs["model_conf"].items() if k != "tasks"},
+        )
+    elif model_type == "transducer":
         predictor_type = configs.get("predictor", "rnn")
         joint_type = configs.get("joint", "transducer_joint")
         predictor = CHUNKFORMER_PREDICTOR_CLASSES[predictor_type](

@@ -20,7 +20,7 @@ def init_dataset(
     partition=True,
     split="train",
 ):
-    assert dataset_type in ["asr", "ssl"]
+    assert dataset_type in ["asr", "ssl", "classification"]
 
     if split != "train":
         cv_conf = copy.deepcopy(conf)
@@ -33,8 +33,17 @@ def init_dataset(
         cv_conf["list_shuffle"] = False
         conf = cv_conf
 
+    # Add dataset_type to conf so Dataset function knows how to batch
+    conf = copy.deepcopy(conf)
+    conf["dataset_type"] = dataset_type
+
     if dataset_type == "asr":
         return init_asr_dataset(data_type, data_list_file, tokenizer, conf, partition)
+    elif dataset_type == "classification":
+        # Classification uses the same Dataset class but without tokenizer
+        return init_asr_dataset(
+            data_type, data_list_file, tokenizer=None, conf=conf, partition=partition
+        )
     else:
         from chunkformer.ssl.init_dataset import init_dataset as init_ssl_dataset
 
