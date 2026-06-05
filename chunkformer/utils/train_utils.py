@@ -20,14 +20,28 @@ import os
 from contextlib import nullcontext
 from typing import List, Optional
 
-import deepspeed
 import torch
 import torch.distributed as dist
 import torch.optim as optim
 import yaml
-from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_all_live
-from deepspeed.runtime.zero.stage_1_and_2 import estimate_zero2_model_states_mem_needs_all_live
-from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
+
+# DeepSpeed is optional. It is only required for the ``deepspeed`` train engine
+# and may be unavailable (or fail to import due to dependency mismatches) in
+# environments that only use torch_ddp / torch_fsdp, including SSL pretraining.
+try:
+    import deepspeed
+    from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_all_live
+    from deepspeed.runtime.zero.stage_1_and_2 import estimate_zero2_model_states_mem_needs_all_live
+    from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
+
+    DEEPSPEED_AVAILABLE = True
+except Exception:  # pragma: no cover - depends on optional dependency
+    deepspeed = None
+    estimate_zero3_model_states_mem_needs_all_live = None
+    estimate_zero2_model_states_mem_needs_all_live = None
+    convert_zero_checkpoint_to_fp32_state_dict = None
+    DEEPSPEED_AVAILABLE = False
+
 from tensorboardX import SummaryWriter
 from torch.distributed.fsdp import CPUOffload
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
@@ -210,7 +224,8 @@ def add_deepspeed_args(parser):
         help="save model/optimizer states",
     )
     # DeepSpeed automaticly add '--deepspeed' and '--deepspeed_config' to parser
-    parser = deepspeed.add_config_arguments(parser)
+    if DEEPSPEED_AVAILABLE:
+        parser = deepspeed.add_config_arguments(parser)
     return parser
 
 
@@ -374,8 +389,8 @@ def init_dataset_and_dataloader(args, configs, tokenizer, seed=777):
     conf = configs["dataset_conf"]
     dataset_type = configs.get("dataset", "asr")
 
-    # Set vocab_size for ASR models
-    if dataset_type != "classification":
+    # Set vocab_size for ASR models only (classification and SSL have no tokenizer)
+    if dataset_type == "asr":
         configs["vocab_size"] = tokenizer.vocab_size()
 
     train_dataset = init_dataset(

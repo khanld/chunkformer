@@ -15,6 +15,7 @@
 import copy
 import datetime
 import logging
+import math
 import sys
 from contextlib import nullcontext
 
@@ -160,25 +161,33 @@ class Executor:
                     else 0.0
                 )
 
-                # Accumulate all losses and accuracies
+                # Accumulate all scalar metrics generically. This covers ASR
+                # ("loss"), classification ("acc_*") and SSL/BEST-RQ metrics
+                # ("corr", "code_perplexity", ...), which may be python scalars
+                # rather than tensors.
                 for key, value in _dict.items():
-                    if value is None or not torch.isfinite(value):
+                    if value is None:
+                        continue
+                    if torch.is_tensor(value):
+                        if value.numel() != 1:
+                            continue
+                        value_item = value.item()
+                    elif isinstance(value, (int, float)):
+                        value_item = float(value)
+                    else:
+                        continue
+                    if not math.isfinite(value_item):
                         continue
 
-                    value_item = value.item()
-
-                    # Accumulate losses
-                    if "loss" in key:
-                        loss_dict[key] = loss_dict.get(key, 0) + value_item * num_utts
-
-                    # Accumulate accuracies (for classification: acc_gender, acc_emotion, etc.)
                     if "acc" in key:
                         acc_dict[key] = acc_dict.get(key, 0) + value_item * num_utts
+                    else:
+                        loss_dict[key] = loss_dict.get(key, 0) + value_item * num_utts
 
                 # write cv: log
                 log_per_step(writer=None, info_dict=info_dict, timer=self.cv_step_timer)
 
-        # Average all accumulated losses
+        # Average all accumulated losses / metrics
         for loss_name in loss_dict:
             loss_dict[loss_name] = loss_dict[loss_name] / num_seen_utts
 
@@ -186,5 +195,6 @@ class Executor:
         for acc_name in acc_dict:
             loss_dict[acc_name] = acc_dict[acc_name] / num_seen_utts
 
-        loss_dict["acc"] = sum(total_acc) / len(total_acc)
+        if total_acc:
+            loss_dict["acc"] = sum(total_acc) / len(total_acc)
         return loss_dict

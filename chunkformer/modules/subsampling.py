@@ -309,3 +309,24 @@ class DepthwiseConvSubsampling(torch.nn.Module):
                 length = (length - one) * stride - add_pad
                 length = math.ceil(length)
         return length if out_length > 0 else 0
+
+    def stacking(self, x):
+        """Stack consecutive input frames into the receptive field of one
+        subsampled output frame.
+
+        Used by BEST-RQ to build the random-projection-quantizer targets: each
+        subsampled output frame corresponds to ``reverse_calc_length(1)`` input
+        frames, stacked along a new last dimension.
+
+        Args:
+            x: (B, T, F) input features.
+        Returns:
+            (B, n, F, size) where ``size = reverse_calc_length(1)`` and ``n`` is
+            the number of subsampled frames.
+        """
+        size = self.reverse_calc_length(1)
+        step = self.subsampling_rate
+
+        # B, T, F -> B, n, F, size
+        x = x.unfold(size=size, step=step, dimension=1)
+        return x

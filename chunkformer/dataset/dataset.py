@@ -136,7 +136,10 @@ def Dataset(
     batch_type = batch_conf.get("batch_type", "static")
     pad_feat = batch_conf.get("pad_feat", "True")
 
-    wrapper_func = lambda batch: processor.padding(batch, pad_feat=pad_feat)
+    # Optional random feature cropping (used by SSL/BEST-RQ pretraining). When
+    # crop_conf is None (ASR/classification default) cropping is a no-op.
+    crop_conf = conf.get("crop_conf", None)
+    wrapper_func = lambda batch: processor.padding(batch, crop_conf=crop_conf, pad_feat=pad_feat)
     assert batch_type in ["static", "bucket", "dynamic"]
     if batch_type == "static":
         assert "batch_size" in batch_conf
@@ -154,7 +157,7 @@ def Dataset(
     else:
         max_frames_in_batch = batch_conf.get("max_frames_in_batch", 12000)
         dataset = dataset.dynamic_batch(
-            processor.DynamicBatchWindow(max_frames_in_batch),
+            processor.DynamicBatchWindow(crop_conf, max_frames_in_batch),
             wrapper_class=wrapper_func,
         )
 

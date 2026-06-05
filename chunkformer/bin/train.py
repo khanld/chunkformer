@@ -101,8 +101,9 @@ def main():
         configs = override_config(configs, args.override_config)
 
     model_type = configs.get("model", "asr_model")
-    # init tokenizer (not needed for classification)
-    tokenizer = None if model_type == "classification" else init_tokenizer(configs)
+    # init tokenizer (not needed for classification or SSL pretraining, which
+    # have no text targets; ASR and transducer still require a tokenizer)
+    tokenizer = None if model_type in ("classification", "bestrq") else init_tokenizer(configs)
 
     # Init env for ddp OR deepspeed
     _, _, rank = init_distributed(args)
@@ -112,7 +113,8 @@ def main():
         args, configs, tokenizer
     )
     # Do some sanity checks and save config to arsg.model_dir
-    if model_type == "classification":
+    if tokenizer is None:
+        # classification and SSL pretraining have no tokenizer / symbol table
         configs = check_modify_and_save_config(args, configs, symbol_table=None)
     else:
         configs = check_modify_and_save_config(args, configs, tokenizer.symbol_table)

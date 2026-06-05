@@ -1,0 +1,86 @@
+# BEST-RQ self-supervised pretraining of the ChunkFormer encoder.
+# (BERT-based Speech pre-Training with Random-projection Quantizer)
+
+encoder: chunkformer
+encoder_conf:
+    output_size: 512            # dimension of attention
+    attention_heads: 8
+    linear_units: 2048          # number of position-wise feed forward units
+    num_blocks: 12              # number of encoder blocks
+    dropout_rate: 0.1
+    encoder_layerdrop: 0.05     # LayerDrop probability (training only)
+    positional_dropout_rate: 0.1
+    attention_dropout_rate: 0.1
+    input_layer: dw_striding    # conv2d, conv2d6, conv2d8 or dw_striding
+    normalize_before: true
+    cnn_module_kernel: 15
+    use_cnn_module: True
+    activation_type: 'swish'
+    pos_enc_layer_type: 'chunk_rel_pos'
+    selfattention_layer_type: 'chunk_rel_seflattn'
+    cnn_module_norm: 'layer_norm'
+    dynamic_conv: true
+
+model: bestrq
+model_conf:
+    final_dim: 512
+    mask_length: 40
+    mask_prob: 0.4
+    mask_selection: "static"
+    latent_vars: 1024           # codebook size (number of classes)
+    latent_groups: 1            # number of codebooks
+    latent_dim: 16              # codebook code dimension
+    require_same_masks: False
+    dist_fn: "l2"
+
+cmvn: global_cmvn
+cmvn_conf:
+    cmvn_file: 'data/train/global_cmvn'
+    is_json_cmvn: true
+
+dataset: ssl
+dataset_conf:
+    filter_conf:
+        max_length: 4000
+        min_length: 50
+        token_max_length: 400
+        token_min_length: 1
+    resample_conf:
+        resample_rate: 16000
+    crop_conf:
+        crop_length: 2000       # random crop to bound sequence length (frames)
+    speed_perturb: false
+    fbank_conf:
+        num_mel_bins: 80
+        frame_shift: 10
+        frame_length: 25
+        dither: 1.0
+    spec_aug: false
+    spec_aug_conf:
+        num_t_mask: 2
+        num_f_mask: 2
+        max_t: 50
+        max_f: 10
+    shuffle: true
+    shuffle_conf:
+        shuffle_size: 1000
+    sort: false
+    sort_conf:
+        sort_size: 500          # sort_size should be <= shuffle_size
+    batch_conf:
+        batch_type: 'dynamic'   # static or dynamic
+        max_frames_in_batch: 700000
+        batch_size: 4
+        pad_feat: True
+
+grad_clip: 5
+accum_grad: 1
+max_epoch: 800
+log_interval: 10
+
+optim: adam
+optim_conf:
+    lr: 0.001
+scheduler: warmuplr             # pytorch v1.1.0+ required
+scheduler_conf:
+    warmup_steps: 25000

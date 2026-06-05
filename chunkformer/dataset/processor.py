@@ -30,7 +30,10 @@ from torch.nn.utils.rnn import pad_sequence
 
 from chunkformer.text.base_tokenizer import BaseTokenizer
 
-torchaudio.utils.sox_utils.set_buffer_size(16500)
+# NOTE: sox_utils.set_buffer_size is deprecated and was removed in newer
+# torchaudio releases. Guard it so import does not fail across versions.
+if hasattr(torchaudio.utils, "sox_utils"):
+    torchaudio.utils.sox_utils.set_buffer_size(16500)
 
 AUDIO_FORMAT_SETS = set(["flac", "mp3", "m4a", "ogg", "opus", "wav", "wma"])
 
@@ -506,7 +509,30 @@ def spec_trim(sample, max_t=20):
     return sample
 
 
-def padding(data, pad_feat=True):
+def crop(sample, crop_length):
+    """Randomly crop ``sample["feat"]`` to a target ``crop_length``.
+
+    Used by SSL/BEST-RQ pretraining to bound the sequence length. Inplace.
+
+    Args:
+        sample: {key, feat, ...}
+        crop_length: target number of frames
+    Returns:
+        sample with a cropped feature tensor (unchanged if shorter than crop_length)
+    """
+    assert "feat" in sample
+    feat = sample["feat"]
+    assert isinstance(feat, torch.Tensor)
+    total_length = feat.size(0)
+    if total_length > crop_length:
+        start_pos = random.randint(0, total_length - crop_length)
+        end_pos = start_pos + crop_length
+        feat = feat[start_pos:end_pos, :]
+        sample["feat"] = feat
+    return sample
+
+
+def padding(data, crop_conf=None, pad_feat=True):
     """Padding the data into training data
 
     Automatically detects and supports both ASR and classification tasks.
@@ -516,6 +542,10 @@ def padding(data, pad_feat=True):
     Args:
         data: List[{key, feat, label, ...}] for ASR or
               List[{key, feat, {task}_label, ...}] for classification
+        crop_conf: optional dict enabling random feature cropping for SSL
+            pretraining. ``crop_length`` is either an int or "min" (crop to the
+            shortest sample in the batch, bounded by ``max_crop_length``). When
+            None (ASR/classification default), no cropping is applied.
         pad_feat: Whether to pad features
 
     Returns:
@@ -524,6 +554,13 @@ def padding(data, pad_feat=True):
     sample = data
     assert isinstance(sample, list)
     assert len(sample) > 0, "Empty batch"
+
+    if crop_conf is not None:
+        crop_length = crop_conf.get("crop_length", "min")
+        if crop_length == "min":
+            crop_length = min([x["feat"].size(0) for x in sample])
+            crop_length = min(crop_length, crop_conf.get("max_crop_length"))
+        sample = [crop(s, crop_length=crop_length) for s in sample]
 
     feats_length = torch.tensor([x["feat"].size(0) for x in sample], dtype=torch.int32)
     order = torch.argsort(feats_length, descending=True)
@@ -577,18 +614,38 @@ def padding(data, pad_feat=True):
 
 class DynamicBatchWindow:
 
-    def __init__(self, max_frames_in_batch=12000):
+    def __init__(self, crop_conf=None, max_frames_in_batch=12000):
         self.longest_frames = 0
         self.max_frames_in_batch = max_frames_in_batch
+        self.crop_conf = crop_conf
+        if crop_conf is not None:
+            self.shortest_frames = 1e9
+            self.crop_length = crop_conf.get("crop_length", "min")
+            self.max_crop_length = crop_conf.get("max_crop_length")
 
     def __call__(self, sample, buffer_size):
         assert isinstance(sample, dict)
         assert "feat" in sample
         assert isinstance(sample["feat"], torch.Tensor)
         new_sample_frames = sample["feat"].size(0)
-        self.longest_frames = max(self.longest_frames, new_sample_frames)
-        frames_after_padding = self.longest_frames * (buffer_size + 1)
+        if self.crop_conf is not None:
+            # Account for cropping when estimating the padded batch size so the
+            # frame budget reflects the post-crop sequence length.
+            self.shortest_frames = min(self.shortest_frames, new_sample_frames)
+            self.longest_frames = max(self.longest_frames, new_sample_frames)
+            if self.crop_length == "min":
+                shortest_frames = min(self.shortest_frames, self.max_crop_length)
+                frames_after_padding = shortest_frames * (buffer_size + 1)
+            else:
+                longest_frames = min(self.longest_frames, self.crop_length)
+                frames_after_padding = longest_frames * (buffer_size + 1)
+        else:
+            self.longest_frames = max(self.longest_frames, new_sample_frames)
+            frames_after_padding = self.longest_frames * (buffer_size + 1)
+
         if frames_after_padding > self.max_frames_in_batch:
+            if self.crop_conf is not None:
+                self.shortest_frames = new_sample_frames
             self.longest_frames = new_sample_frames
             return True
         return False

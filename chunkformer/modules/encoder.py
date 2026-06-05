@@ -41,6 +41,7 @@ class ChunkFormerEncoder(torch.nn.Module):
         linear_units: int = 2048,
         num_blocks: int = 6,
         dropout_rate: float = 0.1,
+        encoder_layerdrop: float = 0.0,
         positional_dropout_rate: float = 0.1,
         attention_dropout_rate: float = 0.0,
         input_layer: str = "dw_striding",
@@ -132,6 +133,7 @@ class ChunkFormerEncoder(torch.nn.Module):
         self.dynamic_conv = dynamic_conv
         self.input_size = input_size
         self.attention_heads = attention_heads
+        self.encoder_layerdrop = encoder_layerdrop
 
         self.embed = DepthwiseConvSubsampling(
             subsampling=input_layer,
@@ -289,17 +291,33 @@ class ChunkFormerEncoder(torch.nn.Module):
         r_cnn_cache = []  # type: List[torch.Tensor]
 
         for idx, layer in enumerate(self.encoders):
+            # LayerDrop (https://arxiv.org/abs/1909.11556): randomly skip whole
+            # encoder layers during training. Disabled when encoder_layerdrop=0
+            # (default), so inference/finetuning behaviour is unchanged.
+            if self.training and self.encoder_layerdrop > 0.0:
+                if random.random() < self.encoder_layerdrop:
+                    new_att_cache = att_cache[idx] if att_cache.size(0) > 0 else torch.zeros((0, 0, 0, 0))
+                    new_cnn_cache = cnn_cache[idx] if cnn_cache.size(0) > 0 else torch.zeros((0, 0, 0))
+                    r_att_cache.append(new_att_cache)
+                    r_cnn_cache.append(new_cnn_cache)
+                    continue
             xs, _, new_att_cache, new_cnn_cache = layer(
                 xs,
                 masks,
                 pos_emb,
                 mask_pad,
-                att_cache=att_cache[idx] if att_cache.size(0) > 0 else att_cache,
-                cnn_cache=cnn_cache[idx] if cnn_cache.size(0) > 0 else cnn_cache,
+                att_cache=att_cache[idx] if att_cache.size(0) > 0 else torch.zeros((0, 0, 0, 0)),
+                cnn_cache=cnn_cache[idx] if cnn_cache.size(0) > 0 else torch.zeros((0, 0, 0)),
                 chunk_size=chunk_size,
                 left_context_size=left_context_size,
                 right_context_size=right_context_size,
             )
+            # During training/SSL the caches are empty; force empty placeholders
+            # so torch.stack works even when some layers are dropped.
+            if att_cache.size(0) == 0:
+                new_att_cache = torch.zeros((0, 0, 0, 0))
+            if cnn_cache.size(0) == 0:
+                new_cnn_cache = torch.zeros((0, 0, 0))
             r_att_cache.append(new_att_cache)
             r_cnn_cache.append(new_cnn_cache)
 
