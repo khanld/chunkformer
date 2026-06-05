@@ -91,7 +91,7 @@ def init_speech_model(args, configs):
     decoder = None
     ctc = None
 
-    if model_type not in ("classification", "vipvl", "bestrq"):
+    if model_type not in ("classification", "vipvl"):
         # Create decoder
         decoder = CHUNKFORMER_DECODER_CLASSES[decoder_type](
             vocab_size, encoder.output_size(), **configs["decoder_conf"]
@@ -105,10 +105,8 @@ def init_speech_model(args, configs):
         )
 
     # Create model based on type
-    if model_type in ("vipvl", "bestrq"):
+    if model_type == "vipvl":
         # ViP-VL self-supervised pretraining wraps the encoder only.
-        # "bestrq" is accepted as a backward-compatible alias so checkpoints
-        # trained before the rename still load.
         model = ViPVL(
             encoder,
             encoder_embed_dim=encoder.output_size(),
