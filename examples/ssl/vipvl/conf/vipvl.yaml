@@ -1,5 +1,6 @@
-# BEST-RQ self-supervised pretraining of the ChunkFormer encoder.
-# (BERT-based Speech pre-Training with Random-projection Quantizer)
+# ViP-VL self-supervised pretraining of the ChunkFormer encoder.
+# (Vietnamese self-supervised speech Pretraining via Vector-quantization Learning,
+#  built on the random-projection-quantizer technique / BEST-RQ, arXiv:2202.01855)
 
 encoder: chunkformer
 encoder_conf:
@@ -21,7 +22,7 @@ encoder_conf:
     cnn_module_norm: 'layer_norm'
     dynamic_conv: true
 
-model: bestrq
+model: vipvl
 model_conf:
     final_dim: 512
     mask_length: 40

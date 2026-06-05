@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# BEST-RQ self-supervised pretraining pipeline for the ChunkFormer encoder.
+# ViP-VL self-supervised pretraining pipeline for the ChunkFormer encoder.
 #
 # Stages:
 #   Stage 0: Data format conversion (TSV -> shard/raw list)
 #   Stage 1: Global CMVN computation
-#   Stage 2: Self-supervised pretraining (BEST-RQ)
+#   Stage 2: Self-supervised pretraining (ViP-VL)
 #   Stage 3: Average checkpoints + export an encoder-only checkpoint for finetuning
 #   Stage 4: Push the encoder checkpoint to the Hugging Face Hub (optional)
 #
-# Unlike the ASR recipes, BEST-RQ pretraining has NO text targets, so there is
+# Unlike the ASR recipes, ViP-VL pretraining has NO text targets, so there is
 # no tokenizer / BPE / decoding / WER stage.
 
 . ./path.sh || exit 1;
@@ -34,10 +34,10 @@ train_set=train           # training folder name under $wave_data
 dev_set=dev               # validation folder name under $wave_data
 
 # Training
-train_config=conf/bestrq.yaml
+train_config=conf/vipvl.yaml
 checkpoint=
 num_workers=4
-dir=exp/bestrq
+dir=exp/vipvl
 tensorboard_dir=tensorboard
 train_engine=torch_ddp
 
@@ -49,7 +49,7 @@ export_dir=$dir/encoder_checkpoint
 
 # Hugging Face Hub upload settings (stage 4, optional)
 hf_token=""                        # Your Hugging Face token
-hf_repo_id=""                      # e.g. username/chunkformer-bestrq-encoder
+hf_repo_id=""                      # e.g. username/chunkformer-vipvl-encoder
 hf_private=false
 
 set -e
@@ -81,7 +81,7 @@ fi
 
 
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
-  echo "stage 2: BEST-RQ self-supervised pretraining"
+  echo "stage 2: ViP-VL self-supervised pretraining"
   mkdir -p $dir
   num_gpus=$(echo $CUDA_VISIBLE_DEVICES | awk -F "," '{print NF}')
   dist_backend="nccl"   # use "gloo" if nccl is unavailable
@@ -119,7 +119,7 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
     decode_checkpoint=$dir/final.pt
   fi
 
-  # Strip the BEST-RQ heads (quantizer / final_proj / mask_emb) and keep only the
+  # Strip the ViP-VL heads (quantizer / final_proj / mask_emb) and keep only the
   # encoder.* weights so the checkpoint drops cleanly into ASR / RNN-T / classification
   # finetuning via --checkpoint (load_checkpoint uses strict=False).
   python ../../../tools/export_ssl_encoder.py \
@@ -147,6 +147,6 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
       --repo_id "$hf_repo_id" \
       --token "$hf_token" \
       $private_flag \
-      --commit_message "Upload ChunkFormer BEST-RQ pretrained encoder"
+      --commit_message "Upload ChunkFormer ViP-VL pretrained encoder"
   fi
 fi

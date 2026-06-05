@@ -512,7 +512,7 @@ def spec_trim(sample, max_t=20):
 def crop(sample, crop_length):
     """Randomly crop ``sample["feat"]`` to a target ``crop_length``.
 
-    Used by SSL/BEST-RQ pretraining to bound the sequence length. Inplace.
+    Used by SSL/ViP-VL pretraining to bound the sequence length. Inplace.
 
     Args:
         sample: {key, feat, ...}

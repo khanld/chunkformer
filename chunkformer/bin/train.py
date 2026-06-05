@@ -103,7 +103,9 @@ def main():
     model_type = configs.get("model", "asr_model")
     # init tokenizer (not needed for classification or SSL pretraining, which
     # have no text targets; ASR and transducer still require a tokenizer)
-    tokenizer = None if model_type in ("classification", "bestrq") else init_tokenizer(configs)
+    tokenizer = (
+        None if model_type in ("classification", "vipvl", "bestrq") else init_tokenizer(configs)
+    )
 
     # Init env for ddp OR deepspeed
     _, _, rank = init_distributed(args)

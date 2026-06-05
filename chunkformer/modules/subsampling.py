@@ -314,7 +314,7 @@ class DepthwiseConvSubsampling(torch.nn.Module):
         """Stack consecutive input frames into the receptive field of one
         subsampled output frame.
 
-        Used by BEST-RQ to build the random-projection-quantizer targets: each
+        Used by ViP-VL to build the random-projection-quantizer targets: each
         subsampled output frame corresponds to ``reverse_calc_length(1)`` input
         frames, stacked along a new last dimension.
 

@@ -1,4 +1,4 @@
-"""Random-projection quantizers used by BEST-RQ pretraining.
+"""Random-projection quantizers used by ViP-VL pretraining.
 
 ref: https://arxiv.org/pdf/2202.01855 (Self-Supervised Learning with
 Random-Projection Quantizer for Speech Recognition).
@@ -12,7 +12,7 @@ from torch.linalg import vector_norm
 
 class RandomProjectionQuantizer(nn.Module):
     """Vector quantization using a projection and a randomly initialised codebook
-    this is useful for models like BEST-RQ for instance.
+    this is useful for models like ViP-VL for instance.
 
     The output is the indices of the closest code in the codebook for each
     time step of the input.

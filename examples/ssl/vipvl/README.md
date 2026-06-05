@@ -1,10 +1,11 @@
-# BEST-RQ Self-Supervised Pretraining (ChunkFormer)
+# ViP-VL Self-Supervised Pretraining (ChunkFormer)
 
-This recipe pretrains a ChunkFormer **encoder** with
-[BEST-RQ](https://arxiv.org/abs/2202.01855) (BERT-based Speech pre-Training with
-Random-projection Quantizer) and exports a finetune-ready encoder checkpoint.
+This recipe pretrains a ChunkFormer **encoder** with **ViP-VL** (Vietnamese
+self-supervised speech Pretraining via Vector-quantization Learning) and exports
+a finetune-ready encoder checkpoint. ViP-VL builds on the random-projection
+quantizer technique of [BEST-RQ](https://arxiv.org/abs/2202.01855).
 
-BEST-RQ masks the input fbank features and trains the encoder to predict the
+ViP-VL masks the input fbank features and trains the encoder to predict the
 codebook ids produced by a *frozen* random-projection quantizer over the
 unmasked features. There are **no text labels**, so this recipe has no
 tokenizer / BPE / decoding / WER stages.
@@ -15,7 +16,7 @@ tokenizer / BPE / decoding / WER stages.
 |------|-------------|
 | 0 | Data format conversion (`data.tsv` → shard/raw list) |
 | 1 | Global CMVN computation |
-| 2 | BEST-RQ self-supervised pretraining (DDP) |
+| 2 | ViP-VL self-supervised pretraining (DDP) |
 | 3 | Average checkpoints + export an **encoder-only** checkpoint |
 | 4 | (optional) Push the encoder checkpoint to the Hugging Face Hub |
 
@@ -39,10 +40,10 @@ data/
 
 ## Config
 
-`conf/bestrq.yaml` is the configuration used to train the released checkpoint
+`conf/vipvl.yaml` is the configuration used to train the released checkpoint
 (`avg_50.pt`). Key parts:
 
-- `model: bestrq` with `model_conf` (codebook `latent_vars`, `latent_groups`,
+- `model: vipvl` with `model_conf` (codebook `latent_vars`, `latent_groups`,
   `latent_dim`, masking `mask_prob` / `mask_length`, `dist_fn`).
 - `dataset: ssl` with `crop_conf.crop_length` to bound sequence length.
 - `encoder_conf.encoder_layerdrop` enables LayerDrop during pretraining.
@@ -53,11 +54,11 @@ data/
 ## Exported encoder checkpoint (stage 3)
 
 Stage 3 calls `tools/export_ssl_encoder.py`, which keeps only the `encoder.*`
-weights (dropping the BEST-RQ quantizer / prediction head / mask embedding) and
+weights (dropping the ViP-VL quantizer / prediction head / mask embedding) and
 writes a self-contained, **sanitised** bundle:
 
 ```
-exp/bestrq/encoder_checkpoint/
+exp/vipvl/encoder_checkpoint/
   pytorch_model.pt   # encoder-only weights
   config.yaml        # encoder_conf + feature config (no data paths)
   global_cmvn        # CMVN statistics
@@ -72,16 +73,16 @@ scratch. Make sure the downstream `encoder_conf` matches `config.yaml`.
 
 ```bash
 # In examples/asr/ctc/run.sh (or rnnt / classification)
-checkpoint=/path/to/exp/bestrq/encoder_checkpoint/pytorch_model.pt
+checkpoint=/path/to/exp/vipvl/encoder_checkpoint/pytorch_model.pt
 ```
 
 ## Reproducibility check
 
-`tools/verify_bestrq_parity.py` runs a deterministic forward pass to confirm a
-checkpoint reproduces expected BEST-RQ metrics:
+`tools/verify_vipvl_parity.py` runs a deterministic forward pass to confirm a
+checkpoint reproduces expected ViP-VL metrics:
 
 ```bash
-python ../../../tools/verify_bestrq_parity.py \
-    --config exp/bestrq/train.yaml \
-    --checkpoint exp/bestrq/avg_50.pt
+python ../../../tools/verify_vipvl_parity.py \
+    --config exp/vipvl/train.yaml \
+    --checkpoint exp/vipvl/avg_50.pt
 ```

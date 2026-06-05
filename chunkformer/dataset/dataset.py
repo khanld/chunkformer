@@ -136,7 +136,7 @@ def Dataset(
     batch_type = batch_conf.get("batch_type", "static")
     pad_feat = batch_conf.get("pad_feat", "True")
 
-    # Optional random feature cropping (used by SSL/BEST-RQ pretraining). When
+    # Optional random feature cropping (used by SSL/ViP-VL pretraining). When
     # crop_conf is None (ASR/classification default) cropping is a no-op.
     crop_conf = conf.get("crop_conf", None)
     wrapper_func = lambda batch: processor.padding(batch, crop_conf=crop_conf, pad_feat=pad_feat)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Export a finetune-ready, encoder-only checkpoint from a BEST-RQ SSL run.
+"""Export a finetune-ready, encoder-only checkpoint from a ViP-VL SSL run.
 
-A BEST-RQ checkpoint contains the encoder plus the self-supervised heads
+A ViP-VL checkpoint contains the encoder plus the self-supervised heads
 (``quantizer.*``, ``final_proj.*``, ``mask_emb``). For downstream finetuning we
 only need the encoder weights: ChunkFormer's ``load_checkpoint`` uses
 ``strict=False``, so an ``encoder.*``-only checkpoint loads cleanly into an ASR /
@@ -19,10 +19,10 @@ or uploaded to the Hugging Face Hub with ``tools/push_model_hf.py``.
 
 Usage:
     python tools/export_ssl_encoder.py \
-        --checkpoint exp/bestrq/avg_50.pt \
-        --config exp/bestrq/train.yaml \
+        --checkpoint exp/vipvl/avg_50.pt \
+        --config exp/vipvl/train.yaml \
         --cmvn data/train/global_cmvn \
-        --output_dir exp/bestrq/encoder_checkpoint
+        --output_dir exp/vipvl/encoder_checkpoint
 """
 
 import argparse
@@ -61,7 +61,7 @@ def extract_encoder_state_dict(checkpoint_path: str) -> dict:
     if not encoder_state:
         raise ValueError(
             f"No '{ENCODER_PREFIX}*' tensors found in {checkpoint_path}. "
-            "Is this a ChunkFormer BEST-RQ checkpoint?"
+            "Is this a ChunkFormer ViP-VL checkpoint?"
         )
 
     print(f"Kept {len(encoder_state)} encoder tensors; dropped SSL-head groups: {dropped}")
@@ -88,6 +88,7 @@ def write_readme(output_dir: str, repo_hint: str = "<user/repo>"):
 tags:
 - speech
 - self-supervised-learning
+- vip-vl
 - best-rq
 - chunkformer
 - pretrained-encoder
@@ -96,9 +97,9 @@ license: apache-2.0
 library_name: transformers
 ---
 
-# ChunkFormer BEST-RQ Pretrained Encoder
+# ChunkFormer ViP-VL Pretrained Encoder
 
-Self-supervised (BEST-RQ) pretrained ChunkFormer **encoder** weights, intended as
+Self-supervised (ViP-VL) pretrained ChunkFormer **encoder** weights, intended as
 an initialisation for downstream finetuning (ASR / RNN-T / classification).
 
 This checkpoint contains **only** the `encoder.*` weights. The self-supervised
@@ -155,7 +156,7 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--checkpoint", required=True, help="BEST-RQ checkpoint (.pt)")
+    parser.add_argument("--checkpoint", required=True, help="ViP-VL checkpoint (.pt)")
     parser.add_argument(
         "--config", required=True, help="Training config yaml (e.g. exp/.../train.yaml)"
     )

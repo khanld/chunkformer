@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Deterministic parity check for the BestRQ SSL model.
+"""Deterministic parity check for the ViP-VL SSL model.
 
-Builds a BestRQ model from a training config, loads a checkpoint, runs a single
+Builds a ViP-VL model from a training config, loads a checkpoint, runs a single
 forward pass on a fixed synthetic batch and prints the resulting metrics. The
 random-projection masking is made deterministic by seeding numpy/torch and by
 forcing ``numpy.random.default_rng`` to a fixed seed, so the same code+checkpoint
-always yields identical numbers. This lets us confirm that the cleaned BestRQ
+always yields identical numbers. This lets us confirm that the cleaned ViP-VL
 branch reproduces the original ``kl/add_wav2vec2_ssl`` results exactly.
 
 Usage:
-    PYTHONPATH=<repo> python tools/verify_bestrq_parity.py \
+    PYTHONPATH=<repo> python tools/verify_vipvl_parity.py \
         --config <path/to/init.yaml> --checkpoint <path/to/avg_50.pt>
 """
 
@@ -53,7 +53,7 @@ def build_model(config_path: str):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True, help="Training config yaml (e.g. init.yaml)")
-    parser.add_argument("--checkpoint", required=True, help="BestRQ checkpoint (.pt)")
+    parser.add_argument("--checkpoint", required=True, help="ViP-VL checkpoint (.pt)")
     parser.add_argument("--batch", type=int, default=2)
     parser.add_argument("--frames", type=int, default=400)
     parser.add_argument("--seed", type=int, default=0)
@@ -78,7 +78,7 @@ def main():
             return float(v.detach().float().cpu().item())
         return float(v)
 
-    print("=== BestRQ parity metrics ===")
+    print("=== ViP-VL parity metrics ===")
     for key in ["loss", "corr", "ntokens", "mask_percentile", "code_perplexity", "prob_perplexity"]:
         if key in out:
             print(f"{key}: {scalar(out[key]):.10f}")

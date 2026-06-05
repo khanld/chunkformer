@@ -2,7 +2,7 @@ import torch
 
 
 class MLMLoss:
-    """Masked-language-model style negative log-likelihood loss used by BEST-RQ.
+    """Masked-language-model style negative log-likelihood loss used by ViP-VL.
 
     The logits are expected to already be log-softmax normalised over the
     codebook classes; targets are the random-projection-quantizer codebook ids.

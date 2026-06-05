@@ -162,7 +162,7 @@ class Executor:
                 )
 
                 # Accumulate all scalar metrics generically. This covers ASR
-                # ("loss"), classification ("acc_*") and SSL/BEST-RQ metrics
+                # ("loss"), classification ("acc_*") and SSL/ViP-VL metrics
                 # ("corr", "code_perplexity", ...), which may be python scalars
                 # rather than tensors.
                 for key, value in _dict.items():

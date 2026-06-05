@@ -40,7 +40,7 @@ def init_dataset(
     if dataset_type == "asr":
         return init_asr_dataset(data_type, data_list_file, tokenizer, conf, partition)
     else:
-        # Classification and SSL ("ssl"/BEST-RQ) reuse the same Dataset pipeline
+        # Classification and SSL ("ssl"/ViP-VL) reuse the same Dataset pipeline
         # but without a tokenizer (no text targets).
         return init_asr_dataset(
             data_type, data_list_file, tokenizer=None, conf=conf, partition=partition

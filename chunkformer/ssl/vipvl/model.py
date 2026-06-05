@@ -14,13 +14,14 @@ from chunkformer.ssl.modules.utils import index_put
 from chunkformer.utils.mask import compute_mask_indices, make_pad_mask
 
 
-class BestRQ(torch.nn.Module):
-    """BEST-RQ pretraining wrapper around a ChunkFormer encoder.
+class ViPVL(torch.nn.Module):
+    """ViP-VL self-supervised pretraining wrapper around a ChunkFormer encoder.
 
     Masks the input fbank features, predicts the random-projection-quantizer
     codebook ids of the masked frames, and optimises an MLM (NLL) objective.
-    The quantizer is frozen (random projection + random codebook), following the
-    BEST-RQ recipe.
+    The quantizer is frozen (random projection + random codebook), using the
+    random-projection-quantizer technique (BEST-RQ, arXiv:2202.01855) at the
+    core of ViP-VL.
     """
 
     def __init__(
