@@ -165,7 +165,7 @@ class BestRQ(torch.nn.Module):
         chunk_size: int = 0,
         left_context_size: int = 0,
         right_context_size: int = 0,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         T = xs.size(1)
         masks = ~make_pad_mask(xs_lens, T).unsqueeze(1)  # (B, T)
 
