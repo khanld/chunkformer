@@ -75,14 +75,3 @@ scratch. Make sure the downstream `encoder_conf` matches `config.yaml`.
 # In examples/asr/ctc/run.sh (or rnnt / classification)
 checkpoint=/path/to/exp/vipvl/encoder_checkpoint/pytorch_model.pt
 ```
-
-## Reproducibility check
-
-`tools/verify_vipvl_parity.py` runs a deterministic forward pass to confirm a
-checkpoint reproduces expected ViP-VL metrics:
-
-```bash
-python ../../../tools/verify_vipvl_parity.py \
-    --config exp/vipvl/train.yaml \
-    --checkpoint exp/vipvl/avg_50.pt
-```
