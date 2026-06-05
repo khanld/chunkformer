@@ -283,6 +283,12 @@ def init_distributed(args):
             logging.error("not supported device: {}".format(args.device))
         dist.init_process_group(args.dist_backend)
     elif args.train_engine == "deepspeed":
+        if not DEEPSPEED_AVAILABLE:
+            raise RuntimeError(
+                "train_engine='deepspeed' was requested but DeepSpeed is not "
+                "available in this environment. Install deepspeed, or use "
+                "--train_engine torch_ddp (or torch_fsdp) instead."
+            )
         deepspeed.init_distributed(dist_backend=args.dist_backend)
     else:
         logging.error("not supported engine: {}".format(args.train_engine))

@@ -396,19 +396,25 @@ def compute_mask_indices(
     Args:
         shape: the the shape for which to compute masks.
             should be of size 2 where first element is batch size and 2nd is timesteps
-        padding_mask: optional padding mask of the same size as shape, which will prevent masking padded elements
-        mask_prob: probability for each token to be chosen as start of the span to be masked. this will be multiplied by
-            number of timesteps divided by length of mask span to mask approximately this percentage of all elements.
-            however due to overlaps, the actual number will be smaller (unless no_overlap is True)
+        padding_mask: optional padding mask of the same size as shape, which will
+            prevent masking padded elements
+        mask_prob: probability for each token to be chosen as start of the span to be
+            masked. this will be multiplied by number of timesteps divided by length of
+            mask span to mask approximately this percentage of all elements. however due
+            to overlaps, the actual number will be smaller (unless no_overlap is True)
         mask_type: how to compute mask lengths
             static = fixed size
             uniform = sample from uniform distribution [mask_other, mask_length*2]
-            normal = sample from normal distribution with mean mask_length and stdev mask_other. mask is min 1 element
+            normal = sample from normal distribution with mean mask_length and stdev
+                mask_other. mask is min 1 element
             poisson = sample from possion distribution with lambda = mask length
         min_masks: minimum number of masked spans
-        no_overlap: if false, will switch to an alternative recursive algorithm that prevents spans from overlapping
-        min_space: only used if no_overlap is True, this is how many elements to keep unmasked between spans
-        require_same_masks: if true, will randomly drop out masks until same amount of masks remains in each sample
+        no_overlap: if false, will switch to an alternative recursive algorithm that
+            prevents spans from overlapping
+        min_space: only used if no_overlap is True, this is how many elements to keep
+            unmasked between spans
+        require_same_masks: if true, will randomly drop out masks until same amount of
+            masks remains in each sample
         mask_dropout: randomly dropout this percentage of masks in each example
     """
 
@@ -473,7 +479,7 @@ def compute_mask_indices(
 
         if sum(lengths) == 0:
             if mask_type == "static":
-                raise ValueError(f"this should never happens")
+                raise ValueError("this should never happens")
             else:
                 lengths = [min(mask_length, sz - 1)]
 
@@ -518,11 +524,7 @@ def compute_mask_indices(
                 raise ValueError()
 
             mask_idc = np.asarray(
-                [
-                    mask_idc[j] + offset
-                    for j in range(len(mask_idc))
-                    for offset in range(lengths[j])
-                ]
+                [mask_idc[j] + offset for j in range(len(mask_idc)) for offset in range(lengths[j])]
             )
         mask_idc = np.unique(mask_idc[mask_idc < sz])
         mask_idcs.append(mask_idc)

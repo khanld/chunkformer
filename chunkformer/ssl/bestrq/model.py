@@ -8,10 +8,10 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 
-from chunkformer.utils.mask import compute_mask_indices, make_pad_mask
-from chunkformer.ssl.modules.quantizer import RandomProjectionVectorQuantizer
 from chunkformer.ssl.modules.loss import MLMLoss
+from chunkformer.ssl.modules.quantizer import RandomProjectionVectorQuantizer
 from chunkformer.ssl.modules.utils import index_put
+from chunkformer.utils.mask import compute_mask_indices, make_pad_mask
 
 
 class BestRQ(torch.nn.Module):
@@ -48,7 +48,6 @@ class BestRQ(torch.nn.Module):
         no_mask_channel_overlap: bool = False,
         mask_channel_min_space: int = 1,
         dist_fn: str = "l2",
-        mask_threshold: float = 0.0,
         freeze_quantizer: bool = True,
     ):
         super().__init__()
@@ -84,17 +83,13 @@ class BestRQ(torch.nn.Module):
             freeze=freeze_quantizer,
         )
 
-        self.mask_emb = nn.Parameter(
-            torch.FloatTensor(self.encoder.embed._feat_in).uniform_()
-        )
+        self.mask_emb = nn.Parameter(torch.FloatTensor(self.encoder.embed._feat_in).uniform_())
         self.encoder = encoder
 
         self.final_proj = nn.Linear(encoder_embed_dim, latent_groups * latent_vars)
 
         # loss
-        self.criterion = MLMLoss(
-            mask_threshold=mask_threshold
-        )
+        self.criterion = MLMLoss()
 
     def apply_mask(
         self,
@@ -117,10 +112,7 @@ class BestRQ(torch.nn.Module):
                 min_space=self.mask_channel_min_space,
             )
             mask_channel_indices = (
-                torch.from_numpy(mask_channel_indices)
-                .to(x.device)
-                .unsqueeze(1)
-                .expand(-1, T, -1)
+                torch.from_numpy(mask_channel_indices).to(x.device).unsqueeze(1).expand(-1, T, -1)
             )
             x[mask_channel_indices] = 0
 

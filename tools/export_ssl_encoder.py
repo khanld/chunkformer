@@ -139,7 +139,8 @@ missing, unexpected = model.encoder.load_state_dict(
 ```bibtex
 @INPROCEEDINGS{{10888640,
     author={{Le, Khanh and Ho, Tuan Vu and Tran, Dung and Chau, Duc Thanh}},
-    booktitle={{ICASSP 2025 - 2025 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)}},
+    booktitle={{ICASSP 2025 - 2025 IEEE International Conference on Acoustics,
+        Speech and Signal Processing (ICASSP)}},
     title={{ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription}},
     year={{2025}},
     pages={{1-5}},
@@ -151,12 +152,18 @@ missing, unexpected = model.encoder.load_state_dict(
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--checkpoint", required=True, help="BEST-RQ checkpoint (.pt)")
-    parser.add_argument("--config", required=True, help="Training config yaml (e.g. exp/.../train.yaml)")
+    parser.add_argument(
+        "--config", required=True, help="Training config yaml (e.g. exp/.../train.yaml)"
+    )
     parser.add_argument("--cmvn", default=None, help="global_cmvn file to bundle")
     parser.add_argument("--output_dir", required=True, help="Output bundle directory")
-    parser.add_argument("--repo_hint", default="<user/repo>", help="Repo id used in the README example")
+    parser.add_argument(
+        "--repo_hint", default="<user/repo>", help="Repo id used in the README example"
+    )
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -169,7 +176,7 @@ def main():
 
     # 2. sanitised config
     with open(args.config, "r") as fin:
-        config = yaml.load(fin, Loader=yaml.FullLoader)
+        config = yaml.safe_load(fin)
     clean_config = sanitize_config(config)
     out_cfg = os.path.join(args.output_dir, "config.yaml")
     with open(out_cfg, "w") as fout:
@@ -185,7 +192,7 @@ def main():
 
     # 4. README
     write_readme(args.output_dir, args.repo_hint)
-    print(f"Wrote README.md")
+    print("Wrote README.md")
 
     print("\nEncoder bundle ready:")
     for name in sorted(os.listdir(args.output_dir)):

@@ -22,12 +22,12 @@ from ..modules.cmvn import GlobalCMVN
 from ..modules.ctc import CTC
 from ..modules.decoder import BiTransformerDecoder, TransformerDecoder
 from ..modules.encoder import ChunkFormerEncoder
+from ..ssl.bestrq.model import BestRQ
 from ..transducer.joint import TransducerJoint
 from ..transducer.predictor import ConvPredictor, EmbeddingPredictor, RNNPredictor
 from ..transducer.transducer import Transducer
 from .checkpoint import load_checkpoint, load_trained_modules
 from .cmvn import load_cmvn
-from ..ssl.bestrq.model import BestRQ
 
 CHUNKFORMER_ENCODER_CLASSES = {
     "chunkformer": ChunkFormerEncoder,

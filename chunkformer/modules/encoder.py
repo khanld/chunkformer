@@ -289,6 +289,11 @@ class ChunkFormerEncoder(torch.nn.Module):
     ) -> torch.Tensor:
         r_att_cache = []  # type: List[torch.Tensor]
         r_cnn_cache = []  # type: List[torch.Tensor]
+        # Empty cache placeholders on the compute device so torch.stack works
+        # (e.g. during SSL/training where caches are empty) without device
+        # mismatch on CUDA/NPU.
+        empty_att_cache = torch.zeros((0, 0, 0, 0), device=xs.device)
+        empty_cnn_cache = torch.zeros((0, 0, 0), device=xs.device)
 
         for idx, layer in enumerate(self.encoders):
             # LayerDrop (https://arxiv.org/abs/1909.11556): randomly skip whole
@@ -296,8 +301,8 @@ class ChunkFormerEncoder(torch.nn.Module):
             # (default), so inference/finetuning behaviour is unchanged.
             if self.training and self.encoder_layerdrop > 0.0:
                 if random.random() < self.encoder_layerdrop:
-                    new_att_cache = att_cache[idx] if att_cache.size(0) > 0 else torch.zeros((0, 0, 0, 0))
-                    new_cnn_cache = cnn_cache[idx] if cnn_cache.size(0) > 0 else torch.zeros((0, 0, 0))
+                    new_att_cache = att_cache[idx] if att_cache.size(0) > 0 else empty_att_cache
+                    new_cnn_cache = cnn_cache[idx] if cnn_cache.size(0) > 0 else empty_cnn_cache
                     r_att_cache.append(new_att_cache)
                     r_cnn_cache.append(new_cnn_cache)
                     continue
@@ -306,8 +311,8 @@ class ChunkFormerEncoder(torch.nn.Module):
                 masks,
                 pos_emb,
                 mask_pad,
-                att_cache=att_cache[idx] if att_cache.size(0) > 0 else torch.zeros((0, 0, 0, 0)),
-                cnn_cache=cnn_cache[idx] if cnn_cache.size(0) > 0 else torch.zeros((0, 0, 0)),
+                att_cache=att_cache[idx] if att_cache.size(0) > 0 else empty_att_cache,
+                cnn_cache=cnn_cache[idx] if cnn_cache.size(0) > 0 else empty_cnn_cache,
                 chunk_size=chunk_size,
                 left_context_size=left_context_size,
                 right_context_size=right_context_size,
@@ -315,9 +320,9 @@ class ChunkFormerEncoder(torch.nn.Module):
             # During training/SSL the caches are empty; force empty placeholders
             # so torch.stack works even when some layers are dropped.
             if att_cache.size(0) == 0:
-                new_att_cache = torch.zeros((0, 0, 0, 0))
+                new_att_cache = empty_att_cache
             if cnn_cache.size(0) == 0:
-                new_cnn_cache = torch.zeros((0, 0, 0))
+                new_cnn_cache = empty_cnn_cache
             r_att_cache.append(new_att_cache)
             r_cnn_cache.append(new_cnn_cache)
 

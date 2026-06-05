@@ -559,7 +559,9 @@ def padding(data, crop_conf=None, pad_feat=True):
         crop_length = crop_conf.get("crop_length", "min")
         if crop_length == "min":
             crop_length = min([x["feat"].size(0) for x in sample])
-            crop_length = min(crop_length, crop_conf.get("max_crop_length"))
+            max_crop_length = crop_conf.get("max_crop_length")
+            if max_crop_length is not None:
+                crop_length = min(crop_length, max_crop_length)
         sample = [crop(s, crop_length=crop_length) for s in sample]
 
     feats_length = torch.tensor([x["feat"].size(0) for x in sample], dtype=torch.int32)
@@ -634,7 +636,9 @@ class DynamicBatchWindow:
             self.shortest_frames = min(self.shortest_frames, new_sample_frames)
             self.longest_frames = max(self.longest_frames, new_sample_frames)
             if self.crop_length == "min":
-                shortest_frames = min(self.shortest_frames, self.max_crop_length)
+                shortest_frames = self.shortest_frames
+                if self.max_crop_length is not None:
+                    shortest_frames = min(shortest_frames, self.max_crop_length)
                 frames_after_padding = shortest_frames * (buffer_size + 1)
             else:
                 longest_frames = min(self.longest_frames, self.crop_length)

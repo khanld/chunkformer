@@ -40,7 +40,7 @@ def set_determinism(seed: int = 0, rng_seed: int = 12345):
 
 def build_model(config_path: str):
     with open(config_path, "r") as fin:
-        configs = yaml.load(fin, Loader=yaml.FullLoader)
+        configs = yaml.safe_load(fin)
     # Skip CMVN so we do not depend on an external global_cmvn file. The CMVN
     # buffers from the checkpoint are ignored identically on both branches.
     configs["cmvn"] = None

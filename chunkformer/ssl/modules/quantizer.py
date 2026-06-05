@@ -55,13 +55,11 @@ class RandomProjectionQuantizer(nn.Module):
         """Forward the latent vector to obtain a quantised output"""
 
         x = F.normalize(x @ self.P, dim=2)
-        return vector_norm(
-            (self.CB.unsqueeze(1) - x.unsqueeze(1)), dim=-1
-        ).argmin(dim=1)
+        return vector_norm((self.CB.unsqueeze(1) - x.unsqueeze(1)), dim=-1).argmin(dim=1)
 
 
 class RandomProjectionVectorQuantizer(nn.Module):
-    DIST_FN_LIST = ["l2", "cosine"]
+    DIST_FN_LIST = ["l2"]
 
     def __init__(
         self,
@@ -69,7 +67,7 @@ class RandomProjectionVectorQuantizer(nn.Module):
         code_dim: int,
         num_classes: int,
         num_books: int,
-        dist_fn: str = "cosine",
+        dist_fn: str = "l2",
         freeze: bool = True,
     ):
         """Vector quantization using random projection proposed in BEST-RQ paper:
@@ -80,13 +78,15 @@ class RandomProjectionVectorQuantizer(nn.Module):
             code_dim: dimension of the codebook features
             num_classes: number of classes
             num_books: number of codebooks
-            dist_fn: distance function to use, one of "l2" or "cosine"
+            dist_fn: distance function to use; only "l2" is supported
             freeze: whether to freeze the projection matrix
         """
         super().__init__()
 
         if dist_fn not in self.DIST_FN_LIST:
-            raise ValueError(f"Unknown distance function {dist_fn}, must be one of {self.DIST_FN_LIST}")
+            raise ValueError(
+                f"Unknown distance function {dist_fn}, must be one of {self.DIST_FN_LIST}"
+            )
 
         self.feat_in = feat_in
         self.code_dim = code_dim
@@ -128,29 +128,22 @@ class RandomProjectionVectorQuantizer(nn.Module):
         # (B, T, num_books*code_dim) -> (B, T, num_books, code_dim)
         x = F.normalize(x.view(B, T, self.num_books, self.code_dim), dim=-1)
 
-        # get tokens (xid) of shape (B, T, num_books)
-        if self.dist_fn == "cosine":
-            # (B, T, num_books, code_dim) -> (B, T, num_books, num_classes)
-            xid = torch.einsum('btdh,dch->btdc', x, self.codebooks)
-            # (B, T, num_books, num_classes) -> (B, T, num_books)
-            xid = xid.max(dim=-1)[1]
-        elif self.dist_fn == "l2":
-            # (B, T, num_books, code_dim) -> (B, T, num_books, code_dim, num_classes)
-            xid = x.unsqueeze(-1) - self.codebooks.transpose(1, 2).unsqueeze(0).unsqueeze(0)
-            # (B, T, num_books, num_classes)
-            xid_soft = xid.norm(dim=-2)
+        # get tokens (xid) of shape (B, T, num_books) using l2 distance
+        # (B, T, num_books, code_dim) -> (B, T, num_books, code_dim, num_classes)
+        xid = x.unsqueeze(-1) - self.codebooks.transpose(1, 2).unsqueeze(0).unsqueeze(0)
+        # (B, T, num_books, num_classes)
+        xid_soft = xid.norm(dim=-2)
 
-            xid_hard = torch.zeros_like(xid_soft, device=xid.device)
-            xid = xid_soft.argmin(dim=-1)
+        xid_hard = torch.zeros_like(xid_soft, device=xid.device)
+        xid = xid_soft.argmin(dim=-1)
 
-            # B, T, num_books, num_classes
-            xid_hard.scatter_(dim=-1, index=xid.unsqueeze(-1), value=1.0)
-
-        else:
-            raise ValueError(f"Unknown distance function {self.dist_fn}, must be one of {self.DIST_FN_LIST}")
+        # B, T, num_books, num_classes
+        xid_hard.scatter_(dim=-1, index=xid.unsqueeze(-1), value=1.0)
 
         # xid2: (B, T, num_books) -> (B, T, num_books)
-        xid2 = xid + self.num_classes * torch.arange(self.num_books, device=xid.device).unsqueeze(0).unsqueeze(0)
+        xid2 = xid + self.num_classes * torch.arange(self.num_books, device=xid.device).unsqueeze(
+            0
+        ).unsqueeze(0)
         # xid2: (B, T, num_books) -> (B*num_books, T)
         xid2 = xid2.transpose(1, 2).contiguous().view(-1, T)
 
@@ -161,18 +154,16 @@ class RandomProjectionVectorQuantizer(nn.Module):
         )
 
         # (B, T, num_books, num_classes) -> (B * T, num_books, num_classes)
-        xid_hard = xid_hard.reshape(xid_hard.size(0) * xid_hard.size(1), self.num_books, self.num_classes)
+        xid_hard = xid_hard.reshape(
+            xid_hard.size(0) * xid_hard.size(1), self.num_books, self.num_classes
+        )
         # (B * T, num_books, num_classes) -> (num_books, num_classes)
         xid_hard = torch.mean(xid_hard.float(), dim=0)
-        code_perplexity = torch.exp(
-            -torch.sum(xid_hard * torch.log(xid_hard + 1e-7), dim=-1)
-        ).sum()
+        code_perplexity = torch.exp(-torch.sum(xid_hard * torch.log(xid_hard + 1e-7), dim=-1)).sum()
 
         xid_soft = torch.softmax(
             xid_soft.view(xid_soft.size(0) * xid_soft.size(1), self.num_books, -1).float(), dim=-1
         ).mean(dim=0)
 
-        prob_perplexity = torch.exp(
-            -torch.sum(xid_soft * torch.log(xid_soft + 1e-7), dim=-1)
-        ).sum()
+        prob_perplexity = torch.exp(-torch.sum(xid_soft * torch.log(xid_soft + 1e-7), dim=-1)).sum()
         return xq, xid, code_perplexity, prob_perplexity
