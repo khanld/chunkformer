@@ -68,10 +68,23 @@ exp/vipvl/encoder_checkpoint/
 ## Finetuning on a downstream task
 
 The encoder weights load via `strict=False`, so point any ASR / RNN-T /
-classification recipe at the exported checkpoint and train the task heads from
-scratch. Make sure the downstream `encoder_conf` matches `config.yaml`.
+classification recipe at the checkpoint and train the task heads from scratch.
+Make sure the downstream `encoder_conf` matches `config.yaml`.
+
+The `checkpoint` (and `enc_init`) argument accepts **either a local path or a
+Hugging Face Hub repo id** — `load_checkpoint` first looks for a local file or a
+local directory containing `pytorch_model.pt`, and otherwise downloads
+`pytorch_model.pt` from the Hub (cached locally):
 
 ```bash
 # In examples/asr/ctc/run.sh (or rnnt / classification)
+
+# Option A — local exported bundle (file or directory)
 checkpoint=/path/to/exp/vipvl/encoder_checkpoint/pytorch_model.pt
+
+# Option B — download straight from the Hugging Face Hub
+checkpoint=khanhld/vip-vl-base-vie
 ```
+
+> For a **private** Hub repo, authenticate first via `huggingface-cli login` or
+> by exporting `HF_TOKEN` (or `HUGGING_FACE_HUB_TOKEN`). Public repos need no token.

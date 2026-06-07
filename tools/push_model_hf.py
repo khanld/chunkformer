@@ -360,18 +360,29 @@ The encoder weights load with `strict=False`, so point any ChunkFormer ASR / RNN
 classification recipe at this checkpoint and train the task heads from scratch. Make sure
 the downstream `encoder_conf` matches `config.yaml`.
 
+The `checkpoint` argument accepts **either a local path or this repo id directly** —
+`load_checkpoint` looks for a local file/directory first and otherwise downloads
+`pytorch_model.pt` from the Hub automatically (cached locally), so no manual download
+step is required:
+
 ```bash
 # e.g. in examples/asr/ctc/run.sh (or rnnt / classification)
+
+# Option A — download straight from the Hub (recommended)
+checkpoint={repo_id}
+
+# Option B — local path to an exported bundle
 checkpoint=/path/to/{repo_id}/pytorch_model.pt
 ```
 
-Download the checkpoint:
+For a **private** repo, authenticate first with `huggingface-cli login` or by exporting
+`HF_TOKEN`. To pre-download (or inspect) the files manually:
 
 ```python
 from huggingface_hub import snapshot_download
 
 local_dir = snapshot_download(repo_id="{repo_id}")
-# local_dir/pytorch_model.pt  ->  pass as the finetuning `checkpoint=`
+# local_dir/pytorch_model.pt  ->  also valid as the finetuning `checkpoint=`
 ```
 
 ## Citation

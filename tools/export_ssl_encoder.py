@@ -117,8 +117,17 @@ Point a ChunkFormer ASR / RNN-T / classification recipe at this checkpoint. The
 encoder weights load via `strict=False`; the task-specific decoder/CTC/heads are
 trained from scratch. Make sure your finetuning `encoder_conf` matches `config.yaml`.
 
+The `checkpoint` argument accepts **either a local path or this repo id directly** —
+`load_checkpoint` resolves a local file/directory first and otherwise downloads
+`pytorch_model.pt` from the Hub automatically (cached locally):
+
 ```bash
 # In your downstream recipe's run.sh
+
+# Download straight from the Hub (recommended)
+checkpoint={repo_hint}
+
+# Or a local path to this bundle
 checkpoint=/path/to/pytorch_model.pt
 ```
 
