@@ -20,6 +20,8 @@ from typing import Tuple, Union
 import torch
 from torch import nn
 
+from chunkformer.utils.mask import onnx_unfold
+
 
 class ChunkConvolutionModule(nn.Module):
     """ConvolutionModule in ChunkFormer model."""
@@ -119,7 +121,12 @@ class ChunkConvolutionModule(nn.Module):
         """
         # exchange the temporal dimension and the feature dimension
         x = x.transpose(1, 2)  # (#batch, channels, time)
+        bsz = x.size(0)
 
+        # Full-context mode: a single chunk spans the whole (dynamic-length)
+        # sequence, so `size`/`step` below depend on the input length and must
+        # not be baked into the ONNX graph.
+        full_ctx = chunk_size <= 0
         if self.dynamic_conv and chunk_size <= 0:
             chunk_size = x.size(2)
         # mask batch padding
@@ -157,7 +164,18 @@ class ChunkConvolutionModule(nn.Module):
 
             n_chunks = ((x.size(2) - size) // step) + 1
             # [B, C, n_chunks, size]
-            x = x.unfold(-1, size=size, step=step)
+            if torch.jit.is_scripting() or torch.onnx.is_in_onnx_export():
+                # `Tensor.unfold` is not supported by the ONNX exporter.
+                if full_ctx:
+                    # Single chunk over the whole sequence: unfold is just adding
+                    # a chunk axis, and keeps the time dimension dynamic.
+                    x = x.unsqueeze(2)
+                else:
+                    # Fixed-size chunking (limited-context / streaming): use the
+                    # gather-based equivalent (chunk count stays dynamic).
+                    x = onnx_unfold(x, -1, size, step)
+            else:
+                x = x.unfold(-1, size=size, step=step)
             # [B, n_chunks, C, size]
             x = x.transpose(1, 2)
             # [B * n_chunks, C, size]
@@ -171,7 +189,12 @@ class ChunkConvolutionModule(nn.Module):
 
         if self.dynamic_conv:
             # [B, n_chunk, C, chunk_size]
-            x = x.reshape(-1, n_chunks, x.size(1), x.size(2))
+            if torch.jit.is_scripting() or torch.onnx.is_in_onnx_export():
+                # keep n_chunks dynamic for ONNX (variable-length input); the
+                # batch axis is taken from `bsz` captured before chunking.
+                x = x.unflatten(0, (bsz, -1))
+            else:
+                x = x.reshape(-1, n_chunks, x.size(1), x.size(2))
             # [B, C, n_chunks, chunk_size]
             x = x.transpose(1, 2)
             # [B, C, n_chunks * chunk_size]
