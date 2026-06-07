@@ -392,7 +392,7 @@ If you use this model, please cite ViP-VL (INTERSPEECH 2026) and ChunkFormer:
 ```bibtex
 @inproceedings{{vipvl,
     title={{ViP-VL: Vietnamese Self-supervised Speech Pretraining Model Leveraging Vector-Quantization Learning}},
-    author={{Le, Khanh and others}},
+    author={{Le, Khanh and Hoang, Kiet Anh and Nguyen, Bao and Vo, Duy and Vo, Dung and Tran, Thai and Pham, Linh and Doan, Khoa D}},
     booktitle={{Proc. INTERSPEECH 2026}},
     year={{2026}}
 }}
