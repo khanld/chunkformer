@@ -12,7 +12,6 @@ from typing import Optional
 
 import yaml
 from huggingface_hub import HfApi, create_repo, upload_folder
-from huggingface_hub.utils import RepositoryNotFoundError
 
 
 class ChunkFormerHubUploader:
@@ -50,10 +49,15 @@ class ChunkFormerHubUploader:
             with open(config_path, "r") as f:
                 config = yaml.load(f, Loader=yaml.FullLoader)
 
-            # Check if it's a classification model
-            model_type_str = config.get("model", "asr_model")
+            # Check the model type
+            model_type_str = config.get("model", "asr_model").lower()
 
-            if "classification" in model_type_str.lower():
+            if model_type_str in ("vipvl", "bestrq"):
+                # Self-supervised pretrained encoder (ViP-VL). "bestrq" is a
+                # legacy alias for configs produced before the rename.
+                return "vipvl", {}
+
+            if "classification" in model_type_str:
                 # Extract task information
                 tasks_info = {}
                 if "model_conf" in config:
@@ -284,9 +288,121 @@ If you use this work in your research, please cite:
 """  # noqa: E501
         return model_card
 
+    def create_ssl_model_card(self, repo_id: str) -> str:
+        """Create model card for the ViP-VL self-supervised pretrained encoder."""
+        model_card = f"""---
+tags:
+- speech
+- self-supervised-learning
+- vip-vl
+- best-rq
+- chunkformer
+- pretrained-encoder
+- speech-pretraining
+- pytorch
+language:
+- vi
+license: apache-2.0
+library_name: transformers
+---
+
+# ChunkFormer ViP-VL — Vietnamese Self-Supervised Speech Encoder
+<style>
+img {{
+display: inline;
+}}
+</style>
+[![GitHub](https://img.shields.io/badge/GitHub-ChunkFormer-blue)](https://github.com/khanld/chunkformer)
+[![Paper](https://img.shields.io/badge/Paper-ChunkFormer%20(ICASSP%202025)-green)](https://arxiv.org/abs/2502.14673)
+
+Self-supervised pretrained **ChunkFormer encoder** from **ViP-VL** (*ViP-VL: Vietnamese
+Self-supervised Speech Pretraining Model with Vector-Quantization Learning*). The encoder
+is pretrained on unlabeled Vietnamese speech with a random-projection-quantizer masked
+prediction objective ([BEST-RQ](https://arxiv.org/abs/2202.01855)) and is meant to be used
+as an **initialization for downstream finetuning** (ASR / RNN-T / classification).
+
+> ⚠️ This checkpoint contains **only** the `encoder.*` weights. The self-supervised heads
+> (random-projection quantizer, prediction head, mask embedding) are intentionally dropped
+> because they are not needed for finetuning. It is **not** a ready-to-use ASR model on its own.
+
+## Method
+
+ViP-VL adapts the random-projection-quantizer masked-prediction recipe (BEST-RQ) to an
+aggressive **8× temporal-subsampling** ChunkFormer backbone, fixing the synchronization
+between the masking manifold and the encoder's subsampling rate:
+
+- **Masking** is applied to the raw 10 ms log-mel frames *before* subsampling; a subsampled
+  frame is treated as masked iff **≥ 80 %** of its constituent input frames are masked.
+- **Targets** come from a *frozen* random-projection quantizer: a fixed random projection of
+  the (CMVN-normalized) input is matched by L2 nearest-neighbour to a fixed random codebook
+  (1024 entries, dimension 16); the encoder is trained with a masked language-model (NLL)
+  objective over masked positions.
+
+## Architecture
+
+| | |
+|---|---|
+| Encoder blocks | 12 |
+| Hidden size | 512 |
+| Attention heads | 8 |
+| FFN size | 2048 |
+| CNN module kernel | 15 |
+| Subsampling | `dw_striding` (8×) |
+| Positional encoding | chunk relative |
+| Input features | 80-dim log-mel fbank @ 16 kHz |
+
+## Files
+
+- `pytorch_model.pt` — encoder-only state dict (`encoder.*`).
+- `config.yaml` — encoder configuration (`encoder_conf`) and feature settings.
+- `global_cmvn` — global CMVN statistics used during pretraining.
+
+## Finetuning
+
+The encoder weights load with `strict=False`, so point any ChunkFormer ASR / RNN-T /
+classification recipe at this checkpoint and train the task heads from scratch. Make sure
+the downstream `encoder_conf` matches `config.yaml`.
+
+```bash
+# e.g. in examples/asr/ctc/run.sh (or rnnt / classification)
+checkpoint=/path/to/{repo_id}/pytorch_model.pt
+```
+
+Download the checkpoint:
+
+```python
+from huggingface_hub import snapshot_download
+
+local_dir = snapshot_download(repo_id="{repo_id}")
+# local_dir/pytorch_model.pt  ->  pass as the finetuning `checkpoint=`
+```
+
+## Citation
+
+If you use this model, please cite ViP-VL (under review) and ChunkFormer:
+
+```bibtex
+@misc{{vipvl,
+    title={{ViP-VL: Vietnamese Self-supervised Speech Pretraining Model with Vector-Quantization Learning}},
+    author={{Le, Khanh and others}},
+    year={{2026}},
+    note={{Under review}}
+}}
+
+@INPROCEEDINGS{{10888640,
+    author={{Le, Khanh and Ho, Tuan Vu and Tran, Dung and Chau, Duc Thanh}},
+    booktitle={{ICASSP 2025 - 2025 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)}},
+    title={{ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription}},
+    year={{2025}},
+    pages={{1-5}},
+    doi={{10.1109/ICASSP49660.2025.10888640}}}}
+```
+"""  # noqa: E501
+        return model_card
+
     def create_model_card(self, model_dir: str, repo_id: str) -> str:
         """
-        Create a model card for the ChunkFormer model (ASR or Classification).
+        Create a model card for the ChunkFormer model (ASR / Classification / ViP-VL).
 
         Args:
             model_dir: Directory containing the model files
@@ -303,7 +419,9 @@ If you use this work in your research, please cite:
             print(f"Classification tasks: {tasks_info}")
 
         # Generate appropriate model card
-        if model_type == "classification":
+        if model_type == "vipvl":
+            return self.create_ssl_model_card(repo_id)
+        elif model_type == "classification":
             return self.create_classification_model_card(repo_id, tasks_info)
         else:
             return self.create_asr_model_card(repo_id)
@@ -320,18 +438,20 @@ If you use this work in your research, please cite:
             True if repository was created or already exists, False otherwise
         """
         try:
-            # Check if repository already exists
-            try:
-                self.api.repo_info(repo_id)
-                print(f"✓ Repository already exists: {repo_id}")
-                return True
-            except RepositoryNotFoundError:
-                pass
-
-            # Create new repository
-            print(f"Creating new repository: {repo_id}")
-            create_repo(repo_id=repo_id, token=self.token, private=private, repo_type="model")
-            print(f"✓ Repository created successfully: {repo_id}")
+            # create_repo with exist_ok=True is idempotent: it creates the repo
+            # if missing and is a no-op if it already exists. This avoids a
+            # separate repo_info() existence probe, which reports private repos
+            # as "not found" when the token is not applied and is therefore
+            # unreliable for gating creation.
+            print(f"Creating repository (if needed): {repo_id}")
+            create_repo(
+                repo_id=repo_id,
+                token=self.token,
+                private=private,
+                repo_type="model",
+                exist_ok=True,
+            )
+            print(f"✓ Repository ready: {repo_id}")
             return True
 
         except Exception as e:
