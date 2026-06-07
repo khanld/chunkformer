@@ -23,8 +23,56 @@ import torch
 import yaml
 
 
+def resolve_checkpoint_path(path: str, filename: str = "pytorch_model.pt") -> str:
+    """Resolve a checkpoint location to a local ``.pt`` file path.
+
+    Accepts, in order of priority:
+
+    1. A local ``.pt`` file path (returned unchanged).
+    2. A local directory that contains ``filename`` (returns the file inside it).
+    3. A Hugging Face Hub repo id, e.g. ``khanhld/vip-vl-base-vie``. In this case
+       ``filename`` is downloaded from the Hub (cached locally) and the cached
+       path is returned. Authentication for private repos is taken from the
+       ``HF_TOKEN`` / ``HUGGING_FACE_HUB_TOKEN`` environment variable or a prior
+       ``huggingface-cli login``.
+
+    This keeps full backward compatibility: existing local paths are returned
+    as-is and only non-existent paths are treated as Hub repo ids.
+    """
+    # 1. Local checkpoint file.
+    if os.path.isfile(path):
+        return path
+
+    # 2. Local directory holding the checkpoint file.
+    if os.path.isdir(path):
+        candidate = os.path.join(path, filename)
+        if os.path.isfile(candidate):
+            return candidate
+        raise FileNotFoundError(f"Checkpoint directory '{path}' does not contain '{filename}'.")
+
+    # 3. Otherwise treat the string as a Hugging Face Hub repo id.
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError as e:  # pragma: no cover - optional dependency
+        raise ImportError(
+            f"'{path}' is not a local file/directory and 'huggingface_hub' is not "
+            "installed, so it cannot be downloaded from the Hugging Face Hub. "
+            "Install it with `pip install huggingface_hub` or pass a local path."
+        ) from e
+
+    rank = int(os.environ.get("RANK", 0))
+    if rank == 0:
+        logging.info(
+            "Checkpoint: '%s' is not a local path; downloading '%s' from the " "Hugging Face Hub.",
+            path,
+            filename,
+        )
+    return str(hf_hub_download(repo_id=path, filename=filename))
+
+
 def load_checkpoint(model: torch.nn.Module, path: str) -> dict:
     rank = int(os.environ.get("RANK", 0))
+    path = resolve_checkpoint_path(path)
     logging.info("[Rank {}] Checkpoint: loading from checkpoint {}".format(rank, path))
     checkpoint = torch.load(path, map_location="cpu", mmap=True)
     missing_keys, unexpected_keys = model.load_state_dict(checkpoint, strict=False)
@@ -91,7 +139,7 @@ def filter_modules(model_state_dict, modules):
 
 def load_trained_modules(model: torch.nn.Module, args: Any):
     # Load encoder modules with pre-trained model(s).
-    enc_model_path = args.enc_init
+    enc_model_path = resolve_checkpoint_path(args.enc_init)
     enc_modules = args.enc_init_mods
     main_state_dict = model.state_dict()
     logging.warning("model(s) found for pre-initialization")

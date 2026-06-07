@@ -22,6 +22,7 @@ from ..modules.cmvn import GlobalCMVN
 from ..modules.ctc import CTC
 from ..modules.decoder import BiTransformerDecoder, TransformerDecoder
 from ..modules.encoder import ChunkFormerEncoder
+from ..ssl.vipvl.model import ViPVL
 from ..transducer.joint import TransducerJoint
 from ..transducer.predictor import ConvPredictor, EmbeddingPredictor, RNNPredictor
 from ..transducer.transducer import Transducer
@@ -90,7 +91,7 @@ def init_speech_model(args, configs):
     decoder = None
     ctc = None
 
-    if model_type != "classification":
+    if model_type not in ("classification", "vipvl"):
         # Create decoder
         decoder = CHUNKFORMER_DECODER_CLASSES[decoder_type](
             vocab_size, encoder.output_size(), **configs["decoder_conf"]
@@ -104,7 +105,14 @@ def init_speech_model(args, configs):
         )
 
     # Create model based on type
-    if model_type == "classification":
+    if model_type == "vipvl":
+        # ViP-VL self-supervised pretraining wraps the encoder only.
+        model = ViPVL(
+            encoder,
+            encoder_embed_dim=encoder.output_size(),
+            **configs["model_conf"],
+        )
+    elif model_type == "classification":
         # Classification model only needs encoder
         tasks = configs["model_conf"].get("tasks", {})
         if not tasks:

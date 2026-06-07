@@ -193,3 +193,6 @@ exp
 data
 raw_wav
 tensorboard
+
+# Local-only dev parity check (not shipped)
+tools/verify_vipvl_parity.py
