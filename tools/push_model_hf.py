@@ -306,24 +306,20 @@ license: apache-2.0
 library_name: transformers
 ---
 
-# ChunkFormer ViP-VL — Vietnamese Self-Supervised Speech Encoder
+# ViP-VL: **Vi**etnamese Self-supervised speech **P**retraining model leveraging **V**ector-quantization **L**earning
 <style>
 img {{
 display: inline;
 }}
 </style>
 [![GitHub](https://img.shields.io/badge/GitHub-ChunkFormer-blue)](https://github.com/khanld/chunkformer)
-[![Paper](https://img.shields.io/badge/Paper-ChunkFormer%20(ICASSP%202025)-green)](https://arxiv.org/abs/2502.14673)
+[![Paper](https://img.shields.io/badge/Paper-INTERSPEECH%202026-green)](https://github.com/khanld/chunkformer)
 
-Self-supervised pretrained **ChunkFormer encoder** from **ViP-VL** (*ViP-VL: Vietnamese
-Self-supervised Speech Pretraining Model with Vector-Quantization Learning*). The encoder
-is pretrained on unlabeled Vietnamese speech with a random-projection-quantizer masked
-prediction objective ([BEST-RQ](https://arxiv.org/abs/2202.01855)) and is meant to be used
-as an **initialization for downstream finetuning** (ASR / RNN-T / classification).
-
-> ⚠️ This checkpoint contains **only** the `encoder.*` weights. The self-supervised heads
-> (random-projection quantizer, prediction head, mask embedding) are intentionally dropped
-> because they are not needed for finetuning. It is **not** a ready-to-use ASR model on its own.
+**ViP-VL** is a self-supervised speech pretraining model for Vietnamese, accepted to
+**INTERSPEECH 2026**. This repository hosts the pretrained **ViP-VL** model: a ChunkFormer
+encoder pretrained on large-scale unlabeled Vietnamese speech with a random-projection-quantizer
+masked-prediction objective ([BEST-RQ](https://arxiv.org/abs/2202.01855)). It is designed to
+initialize downstream finetuning (ASR / RNN-T / classification).
 
 ## Method
 
@@ -342,6 +338,7 @@ between the masking manifold and the encoder's subsampling rate:
 
 | | |
 |---|---|
+| Encoder | ChunkFormer |
 | Encoder blocks | 12 |
 | Hidden size | 512 |
 | Attention heads | 8 |
@@ -379,14 +376,14 @@ local_dir = snapshot_download(repo_id="{repo_id}")
 
 ## Citation
 
-If you use this model, please cite ViP-VL (under review) and ChunkFormer:
+If you use this model, please cite ViP-VL (INTERSPEECH 2026) and ChunkFormer:
 
 ```bibtex
-@misc{{vipvl,
-    title={{ViP-VL: Vietnamese Self-supervised Speech Pretraining Model with Vector-Quantization Learning}},
+@inproceedings{{vipvl,
+    title={{ViP-VL: Vietnamese Self-supervised Speech Pretraining Model Leveraging Vector-Quantization Learning}},
     author={{Le, Khanh and others}},
-    year={{2026}},
-    note={{Under review}}
+    booktitle={{Proc. INTERSPEECH 2026}},
+    year={{2026}}
 }}
 
 @INPROCEEDINGS{{10888640,
