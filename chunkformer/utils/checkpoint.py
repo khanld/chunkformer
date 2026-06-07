@@ -67,7 +67,7 @@ def resolve_checkpoint_path(path: str, filename: str = "pytorch_model.pt") -> st
             path,
             filename,
         )
-    return hf_hub_download(repo_id=path, filename=filename)
+    return str(hf_hub_download(repo_id=path, filename=filename))
 
 
 def load_checkpoint(model: torch.nn.Module, path: str) -> dict:
