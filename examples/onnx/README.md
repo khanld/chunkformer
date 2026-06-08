@@ -103,6 +103,43 @@ asr.transcribe(feats, np.array([feats.shape[1]], dtype=np.int64))
 - `transcribe_file(...)` additionally needs `torch`, `torchaudio` and `pydub`
   for waveform -> fbank extraction.
 
+## Online (real-time) streaming
+
+For a `--streaming` export, `OnnxAsrModel.stream()` opens a stateful
+`StreamingSession`: push audio as it arrives and get the text decoded so far for
+each push. It manages **all** the streaming caches — the encoder attention/conv
+caches + warm-up offset (used by both CTC and RNN-T), and for RNN-T the predictor
+LSTM state and last emitted token across chunks.
+
+```python
+from chunkformer.onnx.runtime import OnnxAsrModel
+
+asr = OnnxAsrModel("onnx_out/rnnt_stream")
+sess = asr.stream()
+
+for samples in mic_chunks():          # 1-D int16-range PCM (any chunk size)
+    delta = sess.push_waveform(samples)
+    if delta:
+        print(delta, end="", flush=True)
+print(sess.finalize())                # flush the tail
+# sess.text / sess.tokens hold the full hypothesis
+```
+
+- `push_waveform(samples)` buffers audio, extracts fbank online (kaldi
+  snip-edges framing), runs one encoder window per `size` frames and decodes the
+  newly finalized frames. Returns the *delta* text from that push.
+- `push_features(frames)` is the torch-free variant — push pre-computed raw
+  fbank `(n, F)` yourself; only `numpy` + `onnxruntime` are needed.
+- `finalize()` flushes the remaining buffered frames as the final window.
+
+Verify the online session matches the offline streaming path (online vs offline
+fbank, and identical transcripts for both RNN-T and the CTC-only cache path):
+
+```bash
+python tools/verify_streaming_session.py --onnx-dir onnx_out/rnnt_stream \
+    --audio samples/audios/audio_1.wav
+```
+
 ## Verify parity
 
 `tools/verify_onnx_parity.py` reports the max absolute difference between each

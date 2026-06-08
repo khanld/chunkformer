@@ -262,3 +262,206 @@ class OnnxAsrModel:
         else:
             tokens = self.ctc_greedy(enc_out, enc_len)
         return self.tokens_to_text(tokens)
+
+    # ----------------------------------------------------------------- streaming
+    def stream(self, n_steps: int = 64) -> "StreamingSession":
+        """Open a stateful online streaming session.
+
+        Feed audio incrementally with ``push_waveform`` / ``push_features`` and
+        get the text decoded so far for each push; call ``finalize`` to flush.
+        Manages the encoder caches (CTC and RNN-T) and, for RNN-T, the predictor
+        LSTM state across chunks. Requires a ``--streaming`` export.
+        """
+        return StreamingSession(self, n_steps=n_steps)
+
+
+class StreamingSession:
+    """Online, cache-aware streaming decode for one utterance.
+
+    Audio (or pre-computed fbank) is pushed incrementally. Internally it:
+
+    * extracts fbank frames online (sample buffer with kaldi snip-edges framing),
+    * runs ``encoder_chunk.onnx`` once per ``size``-frame window, threading the
+      attention and convolution caches plus the warm-up ``offset``,
+    * decodes the newly finalized encoder frames with CTC or RNN-T greedy search,
+      carrying the CTC repeat-merge state or the RNN-T predictor LSTM state and
+      last emitted token across chunks.
+
+    Each ``push_*`` / ``finalize`` returns the *delta* text produced by that call.
+    The full hypothesis is available via ``.text`` and ``.tokens``.
+    """
+
+    def __init__(self, model: OnnxAsrModel, n_steps: int = 64):
+        if model.encoder_chunk is None or "stream" not in model.meta:
+            raise ValueError(
+                "StreamingSession requires a streaming export (run export_onnx.py "
+                "with --streaming)."
+            )
+        self.m = model
+        self.n_steps = n_steps
+        stream = model.meta["stream"]
+        self.chunk_size = int(stream["chunk_size"])
+        self.left = int(stream["left_context_size"])
+        self.size = int(stream["size"])
+        self.stride = int(stream["stride"])
+
+        nb = int(model.meta["num_blocks"])
+        heads = int(model.meta["attention_heads"])
+        d_out = int(model.meta["encoder_output_size"])
+        lorder = int(model.meta["cnn_lorder"])
+        self.att_cache = np.zeros((nb, 1, heads, self.left, d_out // heads * 2), dtype=np.float32)
+        self.cnn_cache = np.zeros((nb, 1, d_out, lorder), dtype=np.float32)
+        self.offset = 0
+        self.is_transducer = bool(model.meta.get("is_transducer"))
+
+        # feature-extraction (online fbank) state
+        feat = model.meta.get("feature", {})
+        self.sr = int(feat.get("sample_rate", 16000))
+        self.num_mel_bins = int(feat.get("num_mel_bins", model.meta["feat_dim"]))
+        self.frame_length_ms = int(feat.get("frame_length", 25))
+        self.frame_shift_ms = int(feat.get("frame_shift", 10))
+        self._win = int(round(self.sr * self.frame_length_ms / 1000))
+        self._shift = int(round(self.sr * self.frame_shift_ms / 1000))
+        self._sample_buf = np.zeros(0, dtype=np.float32)
+        self._feat_buf = np.zeros((0, model.meta["feat_dim"]), dtype=np.float32)
+
+        # decode state
+        self.tokens: List[int] = []
+        self._ctc_prev = -1  # last argmax id, for cross-chunk CTC repeat-merge
+        if self.is_transducer:
+            self._init_rnnt_state()
+
+    # -------------------------------------------------------------- public API
+    @property
+    def text(self) -> str:
+        return self.m.tokens_to_text(self.tokens)
+
+    def push_features(self, frames: np.ndarray) -> str:
+        """Push raw fbank frames (n, F). Returns the delta text."""
+        prev = self.text
+        if frames is not None and frames.shape[0] > 0:
+            self._feat_buf = np.concatenate([self._feat_buf, frames.astype(np.float32)], axis=0)
+        while self._feat_buf.shape[0] >= self.size:
+            window = self._feat_buf[: self.size][None]
+            enc = self._run_encoder(window)[:, : self.chunk_size, :]
+            self._decode(enc)
+            self._feat_buf = self._feat_buf[self.stride :]
+        return self.text[len(prev) :]
+
+    def push_waveform(self, samples: np.ndarray) -> str:
+        """Push int16-range PCM samples (1-D). Returns the delta text.
+
+        Mirrors the offline extractor: raw int16 sample values, no normalisation,
+        kaldi snip-edges framing. Requires torch/torchaudio.
+        """
+        return self.push_features(self._samples_to_features(samples))
+
+    def finalize(self) -> str:
+        """Flush the remaining buffered frames as the final (padded) window."""
+        prev = self.text
+        if self._feat_buf.shape[0] > 0:
+            window = self._feat_buf
+            if window.shape[0] < self.size:
+                window = np.pad(window, ((0, self.size - window.shape[0]), (0, 0)))
+            enc = self._run_encoder(window[None])  # keep all frames on the last window
+            self._decode(enc)
+            self._feat_buf = self._feat_buf[:0]
+        return self.text[len(prev) :]
+
+    # ---------------------------------------------------------------- internals
+    def _run_encoder(self, window: np.ndarray) -> np.ndarray:
+        enc_out, self.att_cache, self.cnn_cache = self.m.encoder_chunk.run(
+            ["enc_out", "r_att_cache", "r_cnn_cache"],
+            {
+                "chunk": window.astype(np.float32),
+                "att_cache": self.att_cache,
+                "cnn_cache": self.cnn_cache,
+                "offset": np.array(self.offset, dtype=np.int64),
+            },
+        )
+        self.offset += self.chunk_size
+        return enc_out
+
+    def _decode(self, enc: np.ndarray) -> None:
+        if self.is_transducer:
+            self._decode_rnnt(enc)
+        else:
+            self._decode_ctc(enc)
+
+    def _decode_ctc(self, enc: np.ndarray) -> None:
+        log_probs = self.m.ctc_logprobs(enc)[0]  # (T, V)
+        for tok in log_probs.argmax(axis=-1).tolist():
+            if tok != self._ctc_prev:
+                if tok != self.m.blank_id:
+                    self.tokens.append(int(tok))
+                self._ctc_prev = tok
+
+    # --- RNN-T persistent state ------------------------------------------------
+    def _init_rnnt_state(self) -> None:
+        n_layers = int(self.m.meta["predictor"]["n_layers"])
+        hidden = int(self.m.meta["predictor"]["hidden_size"])
+        self._state_m = np.zeros((n_layers, 1, hidden), dtype=np.float32)
+        self._state_c = np.zeros((n_layers, 1, hidden), dtype=np.float32)
+        self._token = np.array([[self.m.blank_id]], dtype=np.int64)
+        self._prev_nblk = True
+        self._pred_out, self._cand_m, self._cand_c = self.m.predictor.run(
+            ["pred_out", "new_m", "new_c"],
+            {"token": self._token, "state_m": self._state_m, "state_c": self._state_c},
+        )
+
+    def _decode_rnnt(self, enc: np.ndarray) -> None:
+        for t in range(enc.shape[1]):
+            enc_t = enc[:, t : t + 1, :].astype(np.float32)
+            per_frame_noblk = 0
+            while True:
+                if self._prev_nblk:
+                    self._pred_out, self._cand_m, self._cand_c = self.m.predictor.run(
+                        ["pred_out", "new_m", "new_c"],
+                        {
+                            "token": self._token,
+                            "state_m": self._state_m,
+                            "state_c": self._state_c,
+                        },
+                    )
+                (logits,) = self.m.joint.run(["logits"], {"enc_t": enc_t, "pred": self._pred_out})
+                best = int(logits.reshape(-1).argmax())
+                if best != self.m.blank_id:
+                    self.tokens.append(best)
+                    self._prev_nblk = True
+                    per_frame_noblk += 1
+                    self._token = np.array([[best]], dtype=np.int64)
+                    self._state_m, self._state_c = self._cand_m, self._cand_c
+                if best == self.m.blank_id or per_frame_noblk >= self.n_steps:
+                    self._prev_nblk = best != self.m.blank_id
+                    break
+
+    # --- online fbank ----------------------------------------------------------
+    def _samples_to_features(self, samples: np.ndarray) -> np.ndarray:
+        try:
+            import torch
+            import torchaudio.compliance.kaldi as kaldi
+        except ImportError as e:  # pragma: no cover - optional deps
+            raise ImportError(
+                "push_waveform needs torch and torchaudio. Use push_features with "
+                "pre-computed fbank for a torch-free deployment."
+            ) from e
+
+        self._sample_buf = np.concatenate(
+            [self._sample_buf, np.asarray(samples, dtype=np.float32).reshape(-1)]
+        )
+        if self._sample_buf.shape[0] < self._win:
+            return np.zeros((0, self._feat_buf.shape[1]), dtype=np.float32)
+        n_frames = 1 + (self._sample_buf.shape[0] - self._win) // self._shift
+        end = (n_frames - 1) * self._shift + self._win
+        wav = torch.from_numpy(self._sample_buf[:end].copy()).float().unsqueeze(0)
+        mat = kaldi.fbank(
+            wav,
+            num_mel_bins=self.num_mel_bins,
+            frame_length=self.frame_length_ms,
+            frame_shift=self.frame_shift_ms,
+            dither=0.0,
+            energy_floor=0.0,
+            sample_frequency=self.sr,
+        )
+        self._sample_buf = self._sample_buf[n_frames * self._shift :]
+        return mat.numpy().astype(np.float32)
