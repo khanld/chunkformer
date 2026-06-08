@@ -32,7 +32,7 @@ Examples
 import argparse
 import json
 import os
-from typing import Dict
+from typing import Any, Dict
 
 import torch
 
@@ -100,7 +100,7 @@ def export_encoder_full(
 
 
 def export_encoder_chunk(
-    encoder: torch.nn.Module,
+    encoder: Any,
     feat_dim: int,
     chunk_size: int,
     left: int,
@@ -171,7 +171,7 @@ def export_ctc(ctc: torch.nn.Module, d_out: int, out_dir: str, simplify: bool):
         _maybe_simplify(path)
 
 
-def export_predictor(predictor: torch.nn.Module, out_dir: str, simplify: bool):
+def export_predictor(predictor: Any, out_dir: str, simplify: bool):
     wrapper = PredictorStepOnnx(predictor).eval()
     n_layers = predictor.n_layers
     hidden = predictor.hidden_size

@@ -123,7 +123,8 @@ class OnnxAsrModel:
             energy_floor=0.0,
             sample_frequency=sample_rate,
         )
-        return mat.numpy()[None].astype(np.float32)
+        feats: np.ndarray = mat.numpy()[None].astype(np.float32)
+        return feats
 
     def transcribe_file(self, audio_path: str, streaming: bool = False) -> str:
         """End-to-end: audio file path -> text (self-contained)."""
@@ -370,6 +371,7 @@ class StreamingSession:
 
     # ---------------------------------------------------------------- internals
     def _run_encoder(self, window: np.ndarray) -> np.ndarray:
+        assert self.m.encoder_chunk is not None
         enc_out, self.att_cache, self.cnn_cache = self.m.encoder_chunk.run(
             ["enc_out", "r_att_cache", "r_cnn_cache"],
             {
@@ -380,7 +382,7 @@ class StreamingSession:
             },
         )
         self.offset += self.chunk_size
-        return enc_out
+        return np.asarray(enc_out)
 
     def _decode(self, enc: np.ndarray) -> None:
         if self.is_transducer:
@@ -398,6 +400,7 @@ class StreamingSession:
 
     # --- RNN-T persistent state ------------------------------------------------
     def _init_rnnt_state(self) -> None:
+        assert self.m.predictor is not None and self.m.joint is not None
         n_layers = int(self.m.meta["predictor"]["n_layers"])
         hidden = int(self.m.meta["predictor"]["hidden_size"])
         self._state_m = np.zeros((n_layers, 1, hidden), dtype=np.float32)
@@ -410,6 +413,7 @@ class StreamingSession:
         )
 
     def _decode_rnnt(self, enc: np.ndarray) -> None:
+        assert self.m.predictor is not None and self.m.joint is not None
         for t in range(enc.shape[1]):
             enc_t = enc[:, t : t + 1, :].astype(np.float32)
             per_frame_noblk = 0
@@ -463,5 +467,6 @@ class StreamingSession:
             energy_floor=0.0,
             sample_frequency=self.sr,
         )
+        feats: np.ndarray = mat.numpy().astype(np.float32)
         self._sample_buf = self._sample_buf[n_frames * self._shift :]
-        return mat.numpy().astype(np.float32)
+        return feats
