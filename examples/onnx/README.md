@@ -67,24 +67,41 @@ The time dimension stays dynamic, so one graph handles variable-length audio.
 
 ## Inference
 
+The export folder is **self-contained** — it ships the `*.onnx` graphs, the
+vocabulary (`vocab.txt`) and the feature config (`onnx_config.json`). A new user
+needs only the folder; the PyTorch model is **not** required at inference time.
+
 ```python
-import numpy as np
-from chunkformer.chunkformer_model import ChunkFormerModel
 from chunkformer.onnx.runtime import OnnxAsrModel
 
-# char_dict (id -> token) for text output; reuse the PyTorch model's table
-pt = ChunkFormerModel.from_pretrained("khanhld/chunkformer-ctc-large-vie")
-feats, flen = pt._load_audio_and_extract_features("samples/audios/audio_1.wav")
-
-onnx = OnnxAsrModel("onnx_out/ctc", device="cpu", char_dict=pt.char_dict)
-text = onnx.transcribe(
-    feats.unsqueeze(0).numpy(), np.array([flen], dtype=np.int64), streaming=False
-)
-print(text)
+# vocab.txt is auto-loaded from the export dir, so text output works out of the box
+asr = OnnxAsrModel("onnx_out/ctc", device="cpu")   # device="cuda" for GPU
+print(asr.transcribe_file("samples/audios/audio_1.wav"))
 ```
 
 For a streaming model, pass `streaming=True` (the runtime runs the cache-aware
-chunk loop using the parameters stored in `onnx_config.json`).
+chunk loop using the parameters stored in `onnx_config.json`):
+
+```python
+asr = OnnxAsrModel("onnx_out/rnnt_stream")
+print(asr.transcribe_file("samples/audios/audio_1.wav", streaming=True))
+```
+
+`transcribe_file` extracts fbank features with `torchaudio` + `pydub` (CMVN is
+baked into the encoder graph). If you already have features, or want a pure
+`numpy`/`onnxruntime` deployment without torch, feed them directly:
+
+```python
+import numpy as np
+feats = np.load("feats.npy")[None]               # (1, T, F) float32 raw fbank
+asr.transcribe(feats, np.array([feats.shape[1]], dtype=np.int64))
+```
+
+### Requirements
+
+- `transcribe(...)` / `encode_*` need only `onnxruntime` + `numpy`.
+- `transcribe_file(...)` additionally needs `torch`, `torchaudio` and `pydub`
+  for waveform -> fbank extraction.
 
 ## Verify parity
 

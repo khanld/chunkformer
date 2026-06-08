@@ -281,6 +281,11 @@ def main():
     )
     blank_id = int(getattr(inner, "blank", 0)) if is_transducer else 0
 
+    # Feature-extraction config so the ONNX runtime can go from waveform to
+    # fbank without loading the PyTorch model (CMVN is baked into the graph).
+    fbank_conf = getattr(hf_model.config, "fbank_conf", {}) or {}
+    resample_conf = getattr(hf_model.config, "resample_conf", {}) or {}
+
     meta: Dict[str, object] = {
         "model_type": model_type,
         "feat_dim": int(feat_dim),
@@ -296,7 +301,21 @@ def main():
         "is_transducer": bool(is_transducer),
         "streaming": bool(args.streaming),
         "opset": int(args.opset),
+        "feature": {
+            "sample_rate": int(resample_conf.get("resample_rate", 16000)),
+            "num_mel_bins": int(fbank_conf.get("num_mel_bins", feat_dim)),
+            "frame_length": int(fbank_conf.get("frame_length", 25)),
+            "frame_shift": int(fbank_conf.get("frame_shift", 10)),
+        },
     }
+
+    # Dump the vocabulary so text output needs no external files.
+    if hf_model.char_dict:
+        vocab_path = os.path.join(args.out_dir, "vocab.txt")
+        with open(vocab_path, "w", encoding="utf-8") as f:
+            for idx in sorted(hf_model.char_dict):
+                f.write(f"{hf_model.char_dict[idx]} {idx}\n")
+        print(f"  wrote {vocab_path}")
 
     if args.full_chunk_size > 0:
         print(

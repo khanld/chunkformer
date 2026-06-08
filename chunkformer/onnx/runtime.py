@@ -60,6 +60,10 @@ class OnnxAsrModel:
         with open(os.path.join(model_dir, "onnx_config.json"), "r", encoding="utf-8") as f:
             self.meta = json.load(f)
         self.blank_id = int(self.meta.get("blank_id", 0))
+        # Fall back to the vocab.txt written next to the graphs so text output
+        # needs no external files / no PyTorch model.
+        if char_dict is None:
+            char_dict = self._load_vocab(os.path.join(model_dir, "vocab.txt"))
         self.char_dict = char_dict
         providers = _providers(device)
 
@@ -74,6 +78,58 @@ class OnnxAsrModel:
         self.ctc = _load("ctc.onnx")
         self.predictor = _load("predictor.onnx")
         self.joint = _load("joint.onnx")
+
+    @staticmethod
+    def _load_vocab(path: str) -> Optional[Dict[int, str]]:
+        """Read a ``token id`` per-line vocab file into ``{id: token}``."""
+        if not os.path.exists(path):
+            return None
+        char_dict: Dict[int, str] = {}
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                arr = line.strip().split()
+                if len(arr) == 2:
+                    char_dict[int(arr[1])] = arr[0]
+        return char_dict or None
+
+    # -------------------------------------------------------------- features
+    def extract_features(self, audio_path: str) -> np.ndarray:
+        """Waveform -> raw fbank (B=1, T, F) float32, matching the PyTorch model.
+
+        CMVN is baked into the encoder graph, so no normalisation is applied
+        here. Requires ``torch``/``torchaudio`` and ``pydub`` (lazy-imported).
+        """
+        try:
+            import torch
+            import torchaudio.compliance.kaldi as kaldi
+            from pydub import AudioSegment
+        except ImportError as e:  # pragma: no cover - optional deps
+            raise ImportError(
+                "extract_features needs torch, torchaudio and pydub. Either install "
+                "them, or pass pre-computed fbank features to transcribe()/encode_*()."
+            ) from e
+
+        feat = self.meta.get("feature", {})
+        sample_rate = int(feat.get("sample_rate", 16000))
+        audio = AudioSegment.from_file(audio_path)
+        audio = audio.set_frame_rate(sample_rate).set_sample_width(2).set_channels(1)
+        waveform = torch.as_tensor(audio.get_array_of_samples(), dtype=torch.float32).unsqueeze(0)
+        mat = kaldi.fbank(
+            waveform,
+            num_mel_bins=int(feat.get("num_mel_bins", self.meta["feat_dim"])),
+            frame_length=int(feat.get("frame_length", 25)),
+            frame_shift=int(feat.get("frame_shift", 10)),
+            dither=0.0,
+            energy_floor=0.0,
+            sample_frequency=sample_rate,
+        )
+        return mat.numpy()[None].astype(np.float32)
+
+    def transcribe_file(self, audio_path: str, streaming: bool = False) -> str:
+        """End-to-end: audio file path -> text (self-contained)."""
+        feats = self.extract_features(audio_path)
+        feat_lens = np.array([feats.shape[1]], dtype=np.int64)
+        return self.transcribe(feats, feat_lens, streaming=streaming)
 
     # ------------------------------------------------------------------ encoder
     def encode_full(self, feats: np.ndarray, feat_lens: np.ndarray):
