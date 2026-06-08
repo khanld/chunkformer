@@ -1,17 +1,5 @@
 # ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription
 ---
-[![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-[![Paper](https://img.shields.io/badge/Paper-ICASSP%202025-green)](https://arxiv.org/abs/2502.14673)
-
-This repository contains the implementation and supplementary materials for our ICASSP 2025 paper, **"ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription"**. The paper has been fully accepted by the reviewers with the highest scores: **4/4/4**.
-
-[![Ranked #1: Speech Recognition on Common Voice Vi](https://img.shields.io/badge/Ranked%20%231%3A%20Speech%20Recognition%20on%20Common%20Voice%20Vi-%F0%9F%8F%86%20SOTA-blueviolet?style=for-the-badge&logo=paperswithcode&logoColor=white)](https://paperswithcode.com/sota/speech-recognition-on-common-voice-vi)
-[![Ranked #1: Speech Recognition on VIVOS](https://img.shields.io/badge/Ranked%20%231%3A%20Speech%20Recognition%20on%20VIVOS-%F0%9F%8F%86%20SOTA-blueviolet?style=for-the-badge&logo=paperswithcode&logoColor=white)](https://paperswithcode.com/sota/speech-recognition-on-vivos)
-
-
-
-https://github.com/user-attachments/assets/aba64174-f965-43f2-92a2-7391fb0dba5c
-
 
 <a name = "updates" ></a>
 ## Updates
@@ -23,6 +11,18 @@ A timeline of model and feature releases (newest first):
 - **2025-11** &mdash; 🗣️ **Speech classification** (gender / emotion / dialect / age): [![Hugging Face](https://img.shields.io/badge/HuggingFace-gender--emotion--dialect--age--classification-orange?logo=huggingface)](https://huggingface.co/khanhld/chunkformer-gender-emotion-dialect-age-classification).
 - **2025-10** &mdash; 🔤 **RNN-T** model released: [![Hugging Face](https://img.shields.io/badge/HuggingFace-chunkformer--rnnt--large--vie-orange?logo=huggingface)](https://huggingface.co/khanhld/chunkformer-rnnt-large-vie).
 - **2025-09** &mdash; 🔡 **CTC** model + training scripts released: [![Hugging Face](https://img.shields.io/badge/HuggingFace-chunkformer--ctc--large--vie-orange?logo=huggingface)](https://huggingface.co/khanhld/chunkformer-ctc-large-vie) (initial `v1.0.0` release).
+---
+[![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
+[![Paper](https://img.shields.io/badge/Paper-ICASSP%202025-green)](https://arxiv.org/abs/2502.14673)
+
+This repository contains the implementation and supplementary materials for our ICASSP 2025 paper, **"ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription"**. The paper has been fully accepted by the reviewers with the highest scores: **4/4/4**.
+
+[![Ranked #1: Speech Recognition on Common Voice Vi](https://img.shields.io/badge/Ranked%20%231%3A%20Speech%20Recognition%20on%20Common%20Voice%20Vi-%F0%9F%8F%86%20SOTA-blueviolet?style=for-the-badge&logo=paperswithcode&logoColor=white)](https://paperswithcode.com/sota/speech-recognition-on-common-voice-vi)
+[![Ranked #1: Speech Recognition on VIVOS](https://img.shields.io/badge/Ranked%20%231%3A%20Speech%20Recognition%20on%20VIVOS-%F0%9F%8F%86%20SOTA-blueviolet?style=for-the-badge&logo=paperswithcode&logoColor=white)](https://paperswithcode.com/sota/speech-recognition-on-vivos)
+
+
+
+https://github.com/user-attachments/assets/aba64174-f965-43f2-92a2-7391fb0dba5c
 
 
 ## Table of Contents
