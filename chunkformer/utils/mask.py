@@ -18,6 +18,28 @@ from typing import Optional, Tuple
 import numpy as np
 import torch
 
+
+def onnx_unfold(x: torch.Tensor, dim: int, size: int, step: int) -> torch.Tensor:
+    """ONNX/JIT-friendly equivalent of ``Tensor.unfold(dim, size, step)``.
+
+    ``Tensor.unfold`` is not supported by the ONNX exporter. This gather-based
+    version produces an identical result (the unfolded ``dim`` is replaced by the
+    number of windows and a window axis of length ``size`` is appended last) while
+    keeping the number-of-windows dimension dynamic via ``unflatten(dim, (-1,
+    size))`` so the exported graph supports variable-length inputs.
+    """
+    dim = dim % x.dim()
+    length = x.size(dim)
+    n = (length - size) // step + 1
+    starts = torch.arange(n, device=x.device) * step  # (n,)
+    offs = torch.arange(size, device=x.device)  # (size,)
+    idx = (starts.unsqueeze(1) + offs.unsqueeze(0)).reshape(-1)  # (n * size,)
+    out = x.index_select(dim, idx)
+    out = out.unflatten(dim, (-1, size))
+    out = out.movedim(dim + 1, out.dim() - 1)
+    return out
+
+
 '''
 def subsequent_mask(
         size: int,

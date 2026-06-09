@@ -194,5 +194,9 @@ data
 raw_wav
 tensorboard
 
+# ONNX export artifacts
+onnx_out/
+*.onnx.data
+
 # Local-only dev parity check (not shipped)
 tools/verify_vipvl_parity.py

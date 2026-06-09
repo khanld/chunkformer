@@ -1,5 +1,17 @@
 # ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription
 ---
+
+<a name = "updates" ></a>
+## Updates
+
+A timeline of model and feature releases (newest first):
+
+- **2026-06** &mdash; ⚡ **ONNX export & runtime**. Export the CTC / RNN-T encoders, CTC head, and RNN-T predictor & joint to ONNX (streaming **and** non-streaming), with a self-contained ONNX Runtime inference host and a true online streaming session (incremental audio in → text out). See [`examples/onnx`](examples/onnx/README.md).
+- **2026-06** &mdash; 🧬 **ViP-VL** Vietnamese self-supervised speech encoder released: [![Hugging Face](https://img.shields.io/badge/HuggingFace-vip--vl--base--vie-orange?logo=huggingface)](https://huggingface.co/khanhld/vip-vl-base-vie). See [`examples/ssl/vipvl`](examples/ssl/vipvl/README.md).
+- **2025-11** &mdash; 🗣️ **Speech classification** (gender / emotion / dialect / age): [![Hugging Face](https://img.shields.io/badge/HuggingFace-gender--emotion--dialect--age--classification-orange?logo=huggingface)](https://huggingface.co/khanhld/chunkformer-gender-emotion-dialect-age-classification).
+- **2025-10** &mdash; 🔤 **RNN-T** model released: [![Hugging Face](https://img.shields.io/badge/HuggingFace-chunkformer--rnnt--large--vie-orange?logo=huggingface)](https://huggingface.co/khanhld/chunkformer-rnnt-large-vie).
+- **2025-09** &mdash; 🔡 **CTC** model + training scripts released: [![Hugging Face](https://img.shields.io/badge/HuggingFace-chunkformer--ctc--large--vie-orange?logo=huggingface)](https://huggingface.co/khanhld/chunkformer-ctc-large-vie) (initial `v1.0.0` release).
+---
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
 [![Paper](https://img.shields.io/badge/Paper-ICASSP%202025-green)](https://arxiv.org/abs/2502.14673)
 
@@ -14,6 +26,7 @@ https://github.com/user-attachments/assets/aba64174-f965-43f2-92a2-7391fb0dba5c
 
 
 ## Table of Contents
+- [Updates](#updates)
 - [Introduction](#introduction)
 - [Key Features](#key-features)
 - [Installation](#installation)

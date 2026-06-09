@@ -6,6 +6,16 @@ from typing import Optional, Tuple
 import torch
 from torch import nn
 
+from chunkformer.utils.mask import onnx_unfold
+
+
+def _unfold(x: torch.Tensor, dim: int, size: int, step: int) -> torch.Tensor:
+    """Use the ONNX-safe unfold during export/scripting, native unfold (a fast
+    view) otherwise so training/eager behaviour and speed are unchanged."""
+    if torch.jit.is_scripting() or torch.onnx.is_in_onnx_export():
+        return onnx_unfold(x, dim, size, step)
+    return x.unfold(dim, size, step)
+
 
 class MultiHeadedAttention(nn.Module):
     """Multi-Head Attention layer.
@@ -255,6 +265,16 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
         """
         (batch_size, num_heads, time1, n) = x.size()
         time2 = time1 + left_context_size + right_context_size
+        if torch.jit.is_scripting() or torch.onnx.is_in_onnx_export():
+            # ONNX/JIT-friendly relative shift. `as_strided` below uses a
+            # data-dependent `storage_offset` (n_stride * (time1 - 1)) which the
+            # ONNX exporter cannot represent. This gather-based version is
+            # numerically identical: out[..., i, j] = x[..., i, (time1-1)-i+j].
+            q_idx = torch.arange(time1, device=x.device).unsqueeze(1)  # (time1, 1)
+            k_idx = torch.arange(time2, device=x.device).unsqueeze(0)  # (1, time2)
+            idx = ((time1 - 1) - q_idx + k_idx).clamp(0, n - 1)  # (time1, time2)
+            idx = idx.view(1, 1, time1, time2).expand(batch_size, num_heads, time1, time2)
+            return torch.gather(x, 3, idx)
         batch_stride = x.stride(0)
         head_stride = x.stride(1)
         time1_stride = x.stride(2)
@@ -338,7 +358,7 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
             n_frames_pad = n_frames_pad % chunk_size
             q = torch.nn.functional.pad(q, (0, 0, 0, 0, 0, n_frames_pad))
             # [B, n_chunks, head, d_k, q_size]
-            q = q.unfold(1, size=chunk_size, step=chunk_size)
+            q = _unfold(q, 1, chunk_size, chunk_size)
             # [B * n_chunks, head, d_k, q_size]
             q = q.reshape(-1, q.size(2), q.size(3), q.size(4))
             # [B * n_chunks,q_size, head, d_k]
@@ -351,9 +371,7 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
                 kv, (0, 0, left_context_size, n_frames_pad + right_context_size)
             )
             # [B, head, n_chunks, d_k * 2, l + c + r]
-            kv = kv.unfold(
-                2, size=left_context_size + chunk_size + right_context_size, step=chunk_size
-            )
+            kv = _unfold(kv, 2, left_context_size + chunk_size + right_context_size, chunk_size)
             # [B, n_chunks, head, l + c + r, d_k * 2]
             kv = kv.permute(0, 2, 1, 4, 3)
             # [B * n_chunks, head, l + c + r, d_k * 2]
@@ -364,7 +382,7 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
             # [B, 1, T + n_frames_pad]
             mask_q = torch.nn.functional.pad(mask, (0, n_frames_pad))
             # [B, 1, n_chunks, chunk_size]
-            mask_q = mask_q.unfold(-1, size=chunk_size, step=chunk_size)
+            mask_q = _unfold(mask_q, -1, chunk_size, chunk_size)
             # [B *n_chunks, chunk_size]
             mask_q = mask_q.reshape(-1, mask_q.size(-1))
 
@@ -373,8 +391,8 @@ class ChunkAttentionWithRelativeRightContext(MultiHeadedAttention):
                 mask, (left_context_size, n_frames_pad + right_context_size)
             )
             # [B, 1, n_chunks, chunk_size]
-            mask_kv = mask_kv.unfold(
-                -1, size=left_context_size + chunk_size + right_context_size, step=chunk_size
+            mask_kv = _unfold(
+                mask_kv, -1, left_context_size + chunk_size + right_context_size, chunk_size
             )
             # [B, * n_chunks, chunk_size]
             mask_kv = mask_kv.reshape(-1, mask_kv.size(3))
