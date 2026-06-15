@@ -45,6 +45,12 @@ class RealtimeASR:
         self.offset = 0
         self.total_frames_processed = 0
         self.accumulated_text = ""  # Accumulate text across all chunks
+
+        # Transducer predictor caches
+        self.pred_cache_m = None
+        self.pred_cache_c = None
+        self.pred_input = None
+
         self.reset_cache()
 
         # Audio capture - prefer PyAudio on macOS for better stability
@@ -134,6 +140,16 @@ class RealtimeASR:
         self.total_frames_processed = 0
         self.accumulated_text = ""  # Reset accumulated text
 
+        # Reset transducer predictor cache if the model has transducer
+        if hasattr(self.model.model, "predictor"):
+            predictor = self.model.model.predictor
+            self.pred_cache_m, self.pred_cache_c = predictor.init_state(
+                batch_size=1, method="zero", device=self.device
+            )
+            # Initialize with blank token
+            blank_id = self.model.model.blank
+            self.pred_input = torch.tensor([blank_id]).reshape(1, 1).to(self.device)
+
     def extract_features(self, audio_chunk: np.ndarray) -> torch.Tensor:
         """Extract fbank features from audio chunk"""
         # Convert to torch tensor
@@ -188,20 +204,85 @@ class RealtimeASR:
     def decode(self, encoder_out: torch.Tensor) -> str:
         """Decode encoder output to text"""
         text: str
-        if hasattr(self.model.model, "ctc"):
+        if self.model.config.model == "asr_model":
             # CTC decoding
             ctc_probs = self.model.model.ctc.log_softmax(encoder_out)  # [B, T, vocab]
             topk = ctc_probs.argmax(dim=-1)  # [B, T]
             hyps = [hyp.tolist() for hyp in topk]
             text = str(get_output(hyps, self.model.char_dict, self.model.config.model)[0])
-        elif hasattr(self.model, "decoder"):
-            # Transducer or attention decoder
-            # Implement appropriate decoding here
-            text = "[Decoder output]"
+        elif self.model.config.model == "transducer":
+            # Transducer decoding using streaming optimized search
+            hyps = self.decode_transducer_streaming(encoder_out)
+            text = str(get_output([hyps], self.model.char_dict, self.model.config.model)[0])
         else:
             text = "[Unknown decoder type]"
 
         return text
+
+    def decode_transducer_streaming(self, encoder_out: torch.Tensor, n_steps: int = 64) -> list:
+        """
+        Streaming transducer decoder based on optimized_search.
+
+        This function processes encoder output frame by frame and maintains
+        predictor state across chunks for streaming inference.
+
+        Args:
+            encoder_out: Encoder output tensor [B=1, T, E]
+            n_steps: Maximum non-blank predictions per frame
+
+        Returns:
+            List of predicted token IDs (without blanks)
+        """
+        model = self.model.model
+        blank_id = model.blank
+
+        max_len = encoder_out.size(1)
+
+        # Use persistent predictor cache across chunks
+        cache_m = self.pred_cache_m
+        cache_c = self.pred_cache_c
+        pred_input = self.pred_input
+
+        # Output buffer for this chunk
+        chunk_hyps = []
+
+        # Process each frame
+        for t in range(max_len):
+            encoder_out_t = encoder_out[:, t : t + 1, :]  # [B=1, 1, E]
+
+            # Allow up to n_steps non-blank predictions per frame
+            for step in range(1, n_steps + 1):
+                # Forward through predictor
+                pred_out_step, new_cache = model.predictor.forward_step(
+                    pred_input, (cache_m, cache_c)
+                )  # [B=1, 1, P]
+
+                # Forward through joint network
+                joint_out_step = model.joint(encoder_out_t, pred_out_step)  # [B=1, 1, V]
+                joint_out_probs = joint_out_step.log_softmax(dim=-1)
+
+                # Get best prediction
+                joint_out_max = joint_out_probs.argmax(dim=-1).squeeze()  # scalar
+                if joint_out_max == blank_id:
+                    # Blank prediction - move to next frame
+                    break
+                else:
+                    # Non-blank prediction
+                    chunk_hyps.append(joint_out_max.item())
+
+                    # Update predictor input and cache for next step
+                    pred_input = joint_out_max.reshape(1, 1)
+                    cache_m, cache_c = new_cache
+
+                    # Check if we've reached max steps per frame
+                    if step >= n_steps:
+                        break
+
+        # Update persistent cache for next chunk
+        self.pred_cache_m = cache_m
+        self.pred_cache_c = cache_c
+        self.pred_input = pred_input
+        return chunk_hyps
 
     def run(self):
         """Main streaming loop"""
