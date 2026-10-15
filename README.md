@@ -75,6 +75,10 @@ cd chunkformer
 pip install -e .
 ```
 
+### Audio decoding
+
+Audio file I/O uses [TorchCodec](https://github.com/meta-pytorch/torchcodec), which requires FFmpeg shared libraries and a [compatible PyTorch release](https://github.com/meta-pytorch/torchcodec#compatibility-with-torch-versions). TorchAudio remains in use for signal processing.
+
 ### Pretrained Models
 | Language | Model |
 |----------|-------|

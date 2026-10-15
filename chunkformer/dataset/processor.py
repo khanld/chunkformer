@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
 import json
 import logging
 import os
@@ -29,11 +28,6 @@ import torchaudio.compliance.kaldi as kaldi
 from torch.nn.utils.rnn import pad_sequence
 
 from chunkformer.text.base_tokenizer import BaseTokenizer
-
-# NOTE: sox_utils.set_buffer_size is deprecated and was removed in newer
-# torchaudio releases. Guard it so import does not fail across versions.
-if hasattr(torchaudio.utils, "sox_utils"):
-    torchaudio.utils.sox_utils.set_buffer_size(16500)
 
 AUDIO_FORMAT_SETS = set(["flac", "mp3", "m4a", "ogg", "opus", "wav", "wma"])
 
@@ -115,27 +109,19 @@ def decode_wav(sample):
     """
     assert "key" in sample
     assert "wav" in sample
-    wav_file = sample["wav"]
-    if isinstance(wav_file, str):
-        with open(wav_file, "rb") as f:
-            wav_file = f.read()
+    from torchcodec.decoders import AudioDecoder
+
+    decoder = AudioDecoder(sample["wav"])
     if "start" in sample:
         assert "end" in sample
-        with io.BytesIO(wav_file) as file_obj:
-            sample_rate = torchaudio.info(file_obj).sample_rate
-            start_frame = int(sample["start"] * sample_rate)
-            end_frame = int(sample["end"] * sample_rate)
-            file_obj.seek(0)
-            waveform, _ = torchaudio.load(
-                file_obj, num_frames=end_frame - start_frame, frame_offset=start_frame
-            )
+        decoded = decoder.get_samples_played_in_range(
+            start_seconds=sample["start"], stop_seconds=sample["end"]
+        )
     else:
-        with io.BytesIO(wav_file) as file_obj:
-            waveform, sample_rate = torchaudio.load(file_obj)
-    # del wav_file
-    del sample["wav"]
-    sample["wav"] = waveform  # overwrite wav
-    sample["sample_rate"] = sample_rate
+        decoded = decoder.get_all_samples()
+
+    sample["wav"] = decoded.data
+    sample["sample_rate"] = decoded.sample_rate
     return sample
 
 
@@ -202,10 +188,9 @@ def speed_perturb(sample, speeds=None):
     waveform = sample["wav"]
     speed = random.choice(speeds)
     if speed != 1.0:
-        wav, _ = torchaudio.sox_effects.apply_effects_tensor(
-            waveform, sample_rate, [["speed", str(speed)], ["rate", str(sample_rate)]]
+        sample["wav"] = torchaudio.functional.resample(
+            waveform, orig_freq=round(sample_rate * speed), new_freq=sample_rate
         )
-        sample["wav"] = wav
 
     return sample
 

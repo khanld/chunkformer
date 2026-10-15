@@ -544,7 +544,7 @@ class AudioFileSimulator:
             dtype: Data type for audio samples ('int16' or 'float32')
             normalize: If False, returns int16 audio like torchaudio.load(normalize=False)
         """
-        import torchaudio
+        from torchcodec.decoders import AudioDecoder
 
         self.audio_path = audio_path
         self.sample_rate = sample_rate
@@ -553,30 +553,15 @@ class AudioFileSimulator:
         self.dtype = dtype
         self.normalize = normalize
 
-        # Load audio without normalization (returns int16)
-        waveform, orig_sr = torchaudio.load(audio_path, normalize=False)
-
-        # Resample if needed
-        if orig_sr != sample_rate:
-            resampler = torchaudio.transforms.Resample(orig_sr, sample_rate)
-            waveform = resampler(waveform)
-
-        # Convert to mono
-        if waveform.shape[0] > 1:
-            waveform = waveform.mean(dim=0, keepdim=True)
-
-        # Convert to numpy
-        self.audio = waveform.squeeze().numpy()
-
-        # Convert dtype if needed
-        if dtype == "int16" and self.audio.dtype != np.int16:
-            self.audio = self.audio.astype(np.int16)
-        elif dtype == "float32" and self.audio.dtype != np.float32:
-            # If audio is int16, normalize to float32 [-1, 1]
-            if self.audio.dtype == np.int16:
-                self.audio = self.audio.astype(np.float32) / 32767.0
-            else:
-                self.audio = self.audio.astype(np.float32)
+        # Decode and resample in TorchCodec, then convert to the requested PCM format.
+        samples = AudioDecoder(
+            audio_path, sample_rate=sample_rate, num_channels=1
+        ).get_all_samples()
+        self.audio = samples.data.squeeze(0).numpy()
+        if dtype == "int16":
+            self.audio = np.clip(self.audio * 32768.0, -32768, 32767).astype(np.int16)
+        elif dtype == "float32":
+            self.audio = self.audio.astype(np.float32)
 
         self.chunk_size = int(sample_rate * chunk_duration_ms / 1000)
         self.position = 0

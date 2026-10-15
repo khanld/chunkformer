@@ -15,7 +15,6 @@ import torchaudio.compliance.kaldi as kaldi
 import yaml
 from colorama import Fore, Style
 from huggingface_hub import snapshot_download
-from pydub import AudioSegment
 from tqdm import tqdm
 from transformers import PretrainedConfig, PreTrainedModel
 from transformers.utils import logging
@@ -294,14 +293,13 @@ class ChunkFormerModel(PreTrainedModel):
         frame_shift = fbank_conf.get("frame_shift", 10)
         dither = 0.0
 
-        # Load audio
-        audio = AudioSegment.from_file(audio_path)
-        audio = audio.set_frame_rate(sample_rate)
-        audio = audio.set_sample_width(2)  # set bit depth to 16bit
-        audio = audio.set_channels(1)  # set to mono
-        waveform = torch.as_tensor(
-            audio.get_array_of_samples(), dtype=torch.float32, device=self.device
-        ).unsqueeze(0)
+        from torchcodec.decoders import AudioDecoder
+
+        # TorchCodec outputs normalized float samples; Kaldi fbank expects PCM-scale values.
+        samples = AudioDecoder(
+            audio_path, sample_rate=sample_rate, num_channels=1
+        ).get_all_samples()
+        waveform = (samples.data * (1 << 15)).to(self.device)
 
         # Extract fbank features
         x = kaldi.fbank(
